@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using static Interop;
@@ -132,23 +133,35 @@ namespace System.Windows.Forms
 
         private static class ThreadWorker
         {
-            private static ManualResetEventSlim _pending = new ManualResetEventSlim();
-            private static ConcurrentQueue<Action> _workQueue = new ConcurrentQueue<Action>();
+            private static readonly object s_lock = new object();
+            private static readonly ManualResetEventSlim s_pending = new ManualResetEventSlim(initialState: true);
+            private static readonly Queue<Action> s_workQueue = new Queue<Action>();
 
             public static void Start()
             {
                 while (true)
                 {
-                    _pending.Wait();
-                    while (_workQueue.TryDequeue(out Action? action))
+                    // Sit idle until there is work to do.
+                    s_pending.Wait();
+
+                    lock (s_lock)
                     {
-                        action.Invoke();
+                        while (s_workQueue.TryDequeue(out Action? action))
+                        {
+                            action.Invoke();
+                        }
+
+                        // Keep Set() and Reset() in the lock to avoid resetting after setting without actually
+                        // dequeueing the work item.
+                        s_pending.Reset();
                     }
                 }
             }
 
             public static void QueueAndWaitForCompletion(Action action)
             {
+                Debug.Assert(s_thread.IsAlive);
+
                 ManualResetEventSlim finished = new ManualResetEventSlim();
 
                 Action trackAction = () =>
@@ -157,9 +170,20 @@ namespace System.Windows.Forms
                     finished.Set();
                 };
 
-                _workQueue.Enqueue(trackAction);
-                _pending.Set();
+                lock (s_lock)
+                {
+                    s_workQueue.Enqueue(trackAction);
+                    s_pending.Set();
+                }
+
+#if DEBUG
+                if (!finished.Wait(50))
+                {
+                    throw new TimeoutException("Failed to get an HDC");
+                }
+#else
                 finished.Wait();
+#endif
             }
         }
     }

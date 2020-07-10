@@ -21,7 +21,7 @@ namespace System.Windows.Forms
     ///  hopefully handling the majority of application use cases. There is a limit of 65K GDI handles system wide and
     ///  10K (default) per process.
     /// </remarks>
-    internal class FontCache
+    internal sealed class FontCache : IDisposable
     {
         private readonly LinkedList<Data> _list = new LinkedList<Data>();
         private readonly ReaderWriterLockSlim _lock = new ReaderWriterLockSlim();
@@ -280,6 +280,26 @@ namespace System.Windows.Forms
             }
 
             return hfont;
+        }
+
+        public void Dispose()
+        {
+            _lock.EnterWriteLock();
+            try
+            {
+                var node = _list.First;
+                while (node != null)
+                {
+                    var nextNode = node.Next;
+                    Gdi32.DeleteObject(node.Value.HFONT);
+                    _list.Remove(node);
+                    node = nextNode;
+                }
+            }
+            finally
+            {
+                _lock.ExitWriteLock();
+            }
         }
 
         internal readonly ref struct FontScope
