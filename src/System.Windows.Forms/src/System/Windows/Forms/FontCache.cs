@@ -26,8 +26,8 @@ namespace System.Windows.Forms
         private readonly LinkedList<Data> _list = new LinkedList<Data>();
         private readonly ReaderWriterLockSlim _lock = new ReaderWriterLockSlim();
 
-        private int _count = 0;
-        private bool _clean = false;
+        private int _count;
+        private bool _clean;
         private readonly int _softLimit;
         private readonly int _hardLimit;
 
