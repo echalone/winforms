@@ -16,32 +16,32 @@ namespace System.Windows.Forms
     internal sealed class ScreenDcCache : IDisposable
     {
         private readonly IntPtr[] _itemsCache;
-
-        private static Thread s_thread;
-
-        static ScreenDcCache()
-        {
-            // We need a thread that doesn't ever finish to create HDCs on so they'll stay valid for all threads
-            // in the process for the life of the process.
-
-            s_thread = new Thread(ThreadWorker.Start)
-            {
-                Name = "WinForms Background Worker"
-            };
-            s_thread.Start();
-        }
+        private readonly Thread _thread;
+        private readonly ThreadWorker _worker;
+        private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
 
         /// <summary>
         ///  Create a cache with space for the specified number of items.
         /// </summary>
         public ScreenDcCache(int cacheSpace = 5)
         {
+            _worker = new ThreadWorker(_tokenSource.Token);
+
+            // We need a thread that doesn't ever finish to create HDCs on so they'll stay valid for all threads
+            // in the process for the life of the process.
+
+            _thread = new Thread(_worker.Start)
+            {
+                Name = "WinForms Background Worker"
+            };
+            _thread.Start();
+
             Debug.Assert(cacheSpace > 0);
 
             _itemsCache = new IntPtr[cacheSpace];
 
             // Create an initial stash of screen dc's
-            ThreadWorker.QueueAndWaitForCompletion(() =>
+            _worker.QueueAndWaitForCompletion(() =>
             {
                 int max = Math.Min(cacheSpace, 5);
                 for (int i = 0; i < max; i++)
@@ -66,7 +66,7 @@ namespace System.Windows.Forms
             }
 
             Gdi32.HDC newDc = default;
-            ThreadWorker.QueueAndWaitForCompletion(() => newDc = Gdi32.CreateCompatibleDC(default));
+            _worker.QueueAndWaitForCompletion(() => newDc = Gdi32.CreateCompatibleDC(default));
             return new ScreenDcScope(this, newDc);
         }
 
@@ -109,6 +109,9 @@ namespace System.Windows.Forms
                         Gdi32.DeleteDC((Gdi32.HDC)hdc);
                     }
                 }
+
+                _tokenSource.Cancel();
+                _tokenSource.Dispose();
             }
         }
 
@@ -131,49 +134,50 @@ namespace System.Windows.Forms
             }
         }
 
-        private static class ThreadWorker
+        private class ThreadWorker
         {
-            private static readonly object s_lock = new object();
-            private static readonly ManualResetEventSlim s_pending = new ManualResetEventSlim(initialState: true);
-            private static readonly Queue<Action> s_workQueue = new Queue<Action>();
+            private readonly object _lock = new object();
+            private readonly ManualResetEventSlim _pending = new ManualResetEventSlim(initialState: true);
+            private readonly Queue<Action> _workQueue = new Queue<Action>();
+            private readonly CancellationToken _cancellationToken;
 
-            public static void Start()
+            public ThreadWorker(CancellationToken token) => _cancellationToken = token;
+
+            public void Start()
             {
-                while (true)
+                while (!_cancellationToken.IsCancellationRequested)
                 {
                     // Sit idle until there is work to do.
-                    s_pending.Wait();
+                    _pending.Wait(_cancellationToken);
 
-                    lock (s_lock)
+                    lock (_lock)
                     {
-                        while (s_workQueue.TryDequeue(out Action? action))
+                        while (_workQueue.TryDequeue(out Action? action))
                         {
                             action.Invoke();
                         }
 
                         // Keep Set() and Reset() in the lock to avoid resetting after setting without actually
                         // dequeueing the work item.
-                        s_pending.Reset();
+                        _pending.Reset();
                     }
                 }
             }
 
-            public static void QueueAndWaitForCompletion(Action action)
+            public void QueueAndWaitForCompletion(Action action)
             {
-                Debug.Assert(s_thread.IsAlive);
-
                 ManualResetEventSlim finished = new ManualResetEventSlim();
 
-                Action trackAction = () =>
+                void trackAction()
                 {
                     action();
                     finished.Set();
-                };
+                }
 
-                lock (s_lock)
+                lock (_lock)
                 {
-                    s_workQueue.Enqueue(trackAction);
-                    s_pending.Set();
+                    _workQueue.Enqueue(trackAction);
+                    _pending.Set();
                 }
 
 #if DEBUG
