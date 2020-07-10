@@ -692,22 +692,22 @@ namespace System.Windows.Forms
 
                         // We need to take into account the padding that GDI adds around the text.
                         int iLeftMargin, iRightMargin;
-                        using (WindowsGraphics wg = WindowsGraphics.FromDeviceContext(g))
-                        {
-                            if ((flags & TextFormatFlags.NoPadding) == TextFormatFlags.NoPadding)
-                            {
-                                wg.TextPadding = TextPaddingOptions.NoPadding;
-                            }
-                            else if ((flags & TextFormatFlags.LeftAndRightPadding) == TextFormatFlags.LeftAndRightPadding)
-                            {
-                                wg.TextPadding = TextPaddingOptions.LeftAndRightPadding;
-                            }
 
-                            using WindowsFont wf = WindowsGraphicsCacheManager.GetWindowsFont(Font);
-                            User32.DRAWTEXTPARAMS dtParams = wg.GetTextMargins(wf);
-                            iLeftMargin = dtParams.iLeftMargin;
-                            iRightMargin = dtParams.iRightMargin;
+                        TextPaddingOptions padding = default;
+                        if ((flags & TextFormatFlags.NoPadding) == TextFormatFlags.NoPadding)
+                        {
+                            padding = TextPaddingOptions.NoPadding;
                         }
+                        else if ((flags & TextFormatFlags.LeftAndRightPadding) == TextFormatFlags.LeftAndRightPadding)
+                        {
+                            padding = TextPaddingOptions.LeftAndRightPadding;
+                        }
+
+                        using var hfont = GdiCache.GetHFONT(Font);
+                        User32.DRAWTEXTPARAMS dtParams = hfont.HFONT.GetTextMargins(padding);
+
+                        iLeftMargin = dtParams.iLeftMargin;
+                        iRightMargin = dtParams.iRightMargin;
 
                         Rectangle visualRectangle = new Rectangle(clientRectWithPadding.X + iLeftMargin,
                                                                   clientRectWithPadding.Y,

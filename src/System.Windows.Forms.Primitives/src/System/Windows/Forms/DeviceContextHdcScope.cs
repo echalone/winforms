@@ -139,5 +139,26 @@ namespace System.Windows.Forms
             // Note that Graphics keeps track of the HDC it passes back, so we don't need to pass it back in
             DeviceContext?.ReleaseHdc();
         }
+
+        /// <summary>
+        ///  Adapter to use where we need to pass as <see cref="IDeviceContext"/>. Be EXTREMELY careful with this
+        ///  and make sure it will not be used outside of the current scope. Ideally we refactor any usages of this
+        ///  away.
+        /// </summary>
+        public IDeviceContext GetIDeviceContextAdapter()
+            => new DeviceContextAdapter(HDC);
+
+        private struct DeviceContextAdapter : IDeviceContext
+        {
+            private Gdi32.HDC _hdc;
+
+            public DeviceContextAdapter(Gdi32.HDC hdc) => _hdc = hdc;
+
+            public void Dispose() { }
+
+            public IntPtr GetHdc() => (IntPtr)_hdc;
+
+            public void ReleaseHdc() { }
+        }
     }
 }

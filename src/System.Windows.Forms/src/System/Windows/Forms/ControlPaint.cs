@@ -176,56 +176,49 @@ namespace System.Windows.Forms
             Gdi32.HBITMAP hBitmap;
             Size size = bitmap.Size;
 
-            using (DeviceContext screenDc = DeviceContext.ScreenDC)
+            using var screen = GdiCache.GetScreenDC();
+            using var dc = new Gdi32.CreateDcScope(screen);
+
+            byte[] enoughBits = new byte[bitmap.Width * bitmap.Height];
+            IntPtr bitmapInfo = CreateBitmapInfo(bitmap, dc);
+            hBitmap = Gdi32.CreateDIBSection(
+                screen,
+                bitmapInfo,
+                Gdi32.DIB.RGB_COLORS,
+                enoughBits,
+                IntPtr.Zero,
+                0);
+
+            Marshal.FreeCoTaskMem(bitmapInfo);
+
+            if (hBitmap.IsNull)
             {
-                Gdi32.HDC hdcS = screenDc.Hdc;
+                throw new Win32Exception();
+            }
 
-                using (DeviceContext compatDc = DeviceContext.FromCompatibleDC(hdcS))
+            try
+            {
+                Gdi32.HGDIOBJ previousBitmap = Gdi32.SelectObject(dc, hBitmap);
+                if (previousBitmap.IsNull)
                 {
-                    Gdi32.HDC dc = compatDc.Hdc;
-
-                    byte[] enoughBits = new byte[bitmap.Width * bitmap.Height];
-                    IntPtr bitmapInfo = CreateBitmapInfo(bitmap, hdcS);
-                    hBitmap = Gdi32.CreateDIBSection(
-                        hdcS,
-                        bitmapInfo,
-                        Gdi32.DIB.RGB_COLORS,
-                        enoughBits,
-                        IntPtr.Zero,
-                        0);
-
-                    Marshal.FreeCoTaskMem(bitmapInfo);
-
-                    if (hBitmap.IsNull)
-                    {
-                        throw new Win32Exception();
-                    }
-
-                    try
-                    {
-                        Gdi32.HGDIOBJ previousBitmap = Gdi32.SelectObject(dc, hBitmap);
-                        if (previousBitmap.IsNull)
-                        {
-                            throw new Win32Exception();
-                        }
-
-                        Gdi32.DeleteObject(previousBitmap);
-
-                        using (Graphics graphics = dc.CreateGraphics())
-                        {
-                            using (Brush brush = new SolidBrush(background))
-                            {
-                                graphics.FillRectangle(brush, 0, 0, size.Width, size.Height);
-                            }
-                            graphics.DrawImage(bitmap, 0, 0, size.Width, size.Height);
-                        }
-                    }
-                    catch
-                    {
-                        Gdi32.DeleteObject(hBitmap);
-                        throw;
-                    }
+                    throw new Win32Exception();
                 }
+
+                Gdi32.DeleteObject(previousBitmap);
+
+                using (Graphics graphics = dc.CreateGraphics())
+                {
+                    using (Brush brush = new SolidBrush(background))
+                    {
+                        graphics.FillRectangle(brush, 0, 0, size.Width, size.Height);
+                    }
+                    graphics.DrawImage(bitmap, 0, 0, size.Width, size.Height);
+                }
+            }
+            catch
+            {
+                Gdi32.DeleteObject(hBitmap);
+                throw;
             }
 
             return (IntPtr)hBitmap;

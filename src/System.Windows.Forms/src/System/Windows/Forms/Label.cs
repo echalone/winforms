@@ -1212,10 +1212,11 @@ namespace System.Windows.Forms
             if (string.IsNullOrEmpty(Text))
             {
                 // empty labels return the font height + borders
-                using (WindowsFont font = WindowsFont.FromFont(Font))
+                using (var hfont = GdiCache.GetHFONT(Font))
+                using (var screen = GdiCache.GetScreenDC())
                 {
                     // this is the character that Windows uses to determine the extent
-                    requiredSize = WindowsGraphicsCacheManager.MeasurementGraphics.GetTextExtent("0", font);
+                    requiredSize = screen.HDC.GetTextExtent("0", hfont);
                     requiredSize.Width = 0;
                 }
             }
@@ -1227,16 +1228,14 @@ namespace System.Windows.Forms
             else
             {
                 // GDI+ rendering.
-                using (Graphics measurementGraphics = WindowsFormsUtils.CreateMeasurementGraphics())
+                using (var screen = GdiCache.GetScreenDCGraphics())
+                using (StringFormat stringFormat = CreateStringFormat())
                 {
-                    using (StringFormat stringFormat = CreateStringFormat())
-                    {
-                        SizeF bounds = (proposedConstraints.Width == 1) ?
-                            new SizeF(0, proposedConstraints.Height) :
-                            new SizeF(proposedConstraints.Width, proposedConstraints.Height);
+                    SizeF bounds = (proposedConstraints.Width == 1) ?
+                        new SizeF(0, proposedConstraints.Height) :
+                        new SizeF(proposedConstraints.Width, proposedConstraints.Height);
 
-                        requiredSize = Size.Ceiling(measurementGraphics.MeasureString(Text, Font, bounds, stringFormat));
-                    }
+                    requiredSize = Size.Ceiling(screen.Graphics.MeasureString(Text, Font, bounds, stringFormat));
                 }
             }
 
@@ -1262,25 +1261,23 @@ namespace System.Windows.Forms
                 return 0;
             }
 
-            using (WindowsGraphics wg = WindowsGraphics.FromHwnd(Handle))
+            TextFormatFlags flags = CreateTextFormatFlags();
+            TextPaddingOptions padding = default;
+
+            if ((flags & TextFormatFlags.NoPadding) == TextFormatFlags.NoPadding)
             {
-                TextFormatFlags flags = CreateTextFormatFlags();
-
-                if ((flags & TextFormatFlags.NoPadding) == TextFormatFlags.NoPadding)
-                {
-                    wg.TextPadding = TextPaddingOptions.NoPadding;
-                }
-                else if ((flags & TextFormatFlags.LeftAndRightPadding) == TextFormatFlags.LeftAndRightPadding)
-                {
-                    wg.TextPadding = TextPaddingOptions.LeftAndRightPadding;
-                }
-
-                using WindowsFont wf = WindowsGraphicsCacheManager.GetWindowsFont(Font);
-                User32.DRAWTEXTPARAMS dtParams = wg.GetTextMargins(wf);
-
-                // This is actually leading margin.
-                return dtParams.iLeftMargin;
+                padding = TextPaddingOptions.NoPadding;
             }
+            else if ((flags & TextFormatFlags.LeftAndRightPadding) == TextFormatFlags.LeftAndRightPadding)
+            {
+                padding = TextPaddingOptions.LeftAndRightPadding;
+            }
+
+            using var hfont = GdiCache.GetHFONT(Font);
+            User32.DRAWTEXTPARAMS dtParams = hfont.HFONT.GetTextMargins(padding);
+
+            // This is actually leading margin.
+            return dtParams.iLeftMargin;
         }
 
         private void ImageListRecreateHandle(object sender, EventArgs e)

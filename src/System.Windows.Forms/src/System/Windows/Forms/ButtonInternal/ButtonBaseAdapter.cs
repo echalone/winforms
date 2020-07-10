@@ -57,15 +57,14 @@ namespace System.Windows.Forms.ButtonInternal
 
         internal virtual Size GetPreferredSizeCore(Size proposedSize)
         {
-            // this is a shared cached graphics, therefore it does not require dispose.
-            using (Graphics measurementGraphics = WindowsFormsUtils.CreateMeasurementGraphics())
+            LayoutOptions options = default;
+            using (var screen = GdiCache.GetScreenDC())
+            using (PaintEventArgs pe = new PaintEventArgs(screen, new Rectangle()))
             {
-                using (PaintEventArgs pe = new PaintEventArgs(measurementGraphics, new Rectangle()))
-                {
-                    LayoutOptions options = Layout(pe);
-                    return options.GetPreferredSizeCore(proposedSize);
-                }
+                options = Layout(pe);
             }
+
+            return options.GetPreferredSizeCore(proposedSize);
         }
 
         protected abstract LayoutOptions Layout(PaintEventArgs e);
@@ -1429,12 +1428,12 @@ namespace System.Windows.Forms.ButtonInternal
                 if (useCompatibleTextRendering)
                 {
                     // GDI+ text rendering.
-                    using (Graphics g = WindowsFormsUtils.CreateMeasurementGraphics())
+                    using (var screen = GdiCache.GetScreenDCGraphics())
+                    using (StringFormat gdipStringFormat = StringFormat)
                     {
-                        using (StringFormat gdipStringFormat = StringFormat)
-                        {
-                            textSize = Size.Ceiling(g.MeasureString(text, font, new SizeF(proposedSize.Width, proposedSize.Height), gdipStringFormat));
-                        }
+                        textSize = Size.Ceiling(
+                            screen.Graphics.MeasureString(text, font, new SizeF(proposedSize.Width, proposedSize.Height),
+                            gdipStringFormat));
                     }
                 }
                 else if (!string.IsNullOrEmpty(text))

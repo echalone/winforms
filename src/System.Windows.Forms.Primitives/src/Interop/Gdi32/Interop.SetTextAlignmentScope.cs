@@ -9,34 +9,34 @@ internal static partial class Interop
     internal static partial class Gdi32
     {
         /// <summary>
-        ///  Helper to scope selecting a given foreground mix mode into a HDC. Restores the original mix mode into the
-        ///  HDC when disposed.
+        ///  Helper to scope selecting a given text alignment mode into a HDC. Restores the original text alignment
+        ///  mode into the HDC when disposed.
         /// </summary>
         /// <remarks>
         ///  Use in a <see langword="using" /> statement. If you must pass this around, always pass by
         ///  <see langword="ref" /> to avoid duplicating the handle and resetting multiple times.
         /// </remarks>
-        internal readonly ref struct SetRop2Scope
+        internal readonly ref struct SetTextAlignmentScope
         {
-            private readonly R2 _previousRop;
+            private readonly TA _previousTa;
             private readonly HDC _hdc;
 
             /// <summary>
-            ///  Selects <paramref name="rop2"/> into the given <paramref name="hdc"/> using <see cref="SetROP2(HDC, R2)"/>.
+            ///  Sets <paramref name="ta"/> in the given <paramref name="hdc"/> using <see cref="SetTextAlign(HDC, TA)"/>.
             /// </summary>
-            public SetRop2Scope(HDC hdc, R2 rop2)
+            public SetTextAlignmentScope(HDC hdc, TA ta)
             {
-                _previousRop = SetROP2(hdc, rop2);
+                _previousTa = SetTextAlign(hdc, ta);
 
-                // If we didn't actually change the ROP, don't keep the HDC so we skip putting back the same state.
-                _hdc = _previousRop == rop2 ? default : hdc;
+                // If we didn't actually change the TA, don't keep the HDC so we skip putting back the same state.
+                _hdc = _previousTa == ta ? default : hdc;
             }
 
             public void Dispose()
             {
                 if (!_hdc.IsNull)
                 {
-                    SetROP2(_hdc, _previousRop);
+                    SetTextAlign(_hdc, _previousTa);
                 }
             }
         }

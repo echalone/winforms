@@ -963,10 +963,11 @@ namespace System.Windows.Forms
             // controls to be the same height.
             Size textExtent = Size.Empty;
 
-            using (WindowsFont font = WindowsFont.FromFont(Font))
+            using (var hfont = GdiCache.GetHFONT(Font))
+            using (var screen = GdiCache.GetScreenDC())
             {
                 // this is the character that Windows uses to determine the extent
-                textExtent = WindowsGraphicsCacheManager.MeasurementGraphics.GetTextExtent("0", font);
+                textExtent = screen.HDC.GetTextExtent("0", hfont);
             }
 
             int dyEdit = textExtent.Height + SystemInformation.Border3DSize.Height;

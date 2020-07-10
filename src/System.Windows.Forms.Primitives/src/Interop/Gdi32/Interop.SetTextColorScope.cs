@@ -3,40 +3,43 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
+using System.Drawing;
 
 internal static partial class Interop
 {
     internal static partial class Gdi32
     {
         /// <summary>
-        ///  Helper to scope selecting a given foreground mix mode into a HDC. Restores the original mix mode into the
-        ///  HDC when disposed.
+        ///  Helper to scope selecting a given foreground text color into a HDC. Restores the original text color into
+        ///  into the HDC when disposed.
         /// </summary>
         /// <remarks>
         ///  Use in a <see langword="using" /> statement. If you must pass this around, always pass by
         ///  <see langword="ref" /> to avoid duplicating the handle and resetting multiple times.
         /// </remarks>
-        internal readonly ref struct SetRop2Scope
+        internal readonly ref struct SetTextColorScope
         {
-            private readonly R2 _previousRop;
+            private readonly int _previousColor;
             private readonly HDC _hdc;
 
             /// <summary>
-            ///  Selects <paramref name="rop2"/> into the given <paramref name="hdc"/> using <see cref="SetROP2(HDC, R2)"/>.
+            ///  Sets text color <paramref name="color"/> in the given <paramref name="hdc"/> using
+            ///  <see cref="SetTextColor(HDC, int)"/>.
             /// </summary>
-            public SetRop2Scope(HDC hdc, R2 rop2)
+            public SetTextColorScope(HDC hdc, Color color)
             {
-                _previousRop = SetROP2(hdc, rop2);
+                int colorref = ColorTranslator.ToWin32(color);
+                _previousColor = SetTextColor(hdc, colorref);
 
-                // If we didn't actually change the ROP, don't keep the HDC so we skip putting back the same state.
-                _hdc = _previousRop == rop2 ? default : hdc;
+                // If we didn't actually change the color, don't keep the HDC so we skip putting back the same state.
+                _hdc = colorref == _previousColor ? default : hdc;
             }
 
             public void Dispose()
             {
                 if (!_hdc.IsNull)
                 {
-                    SetROP2(_hdc, _previousRop);
+                    SetTextColor(_hdc, _previousColor);
                 }
             }
         }

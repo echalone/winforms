@@ -14,6 +14,11 @@ namespace System.Windows.Forms
     /// </summary>
     public static class TextRenderer
     {
+        // Used to clear TextRenderer specific flags from TextFormatFlags
+        internal const int GdiUnsupportedFlagMask = (unchecked((int)0xFF000000));
+
+        internal static Size MaxSize { get; } = new Size(int.MaxValue, int.MaxValue);
+
         public static void DrawText(IDeviceContext dc, string? text, Font? font, Point pt, Color foreColor)
             => DrawTextInternal(dc, text, font, pt, foreColor);
 
@@ -77,7 +82,7 @@ namespace System.Windows.Forms
             Color foreColor,
             Color backColor = default,
             User32.DT flags = User32.DT.DEFAULT)
-            => DrawTextInternal(dc, text, font, new Rectangle(pt, WindowsGraphics.MaxSize), foreColor, backColor, flags);
+            => DrawTextInternal(dc, text, font, new Rectangle(pt, MaxSize), foreColor, backColor, flags);
 
         private static void DrawTextInternal(
             IDeviceContext dc,
@@ -98,26 +103,26 @@ namespace System.Windows.Forms
             // This MUST come before retreiving the HDC, which locks the Graphics object
             Gdi32.QUALITY quality = FontQualityFromTextRenderingHint(dc);
 
-            using WindowsGraphics wg = WindowsGraphics.FromDeviceContext(dc);
-            using WindowsFont? wf = WindowsGraphicsCacheManager.GetWindowsFont(font, quality);
-            wg.DrawText(text, wf, bounds, foreColor, backColor, flags);
+            using var hdc = new DeviceContextHdcScope(dc);
+            using var hfont = GdiCache.GetHFONT(font, quality);
+            hdc.DrawText(text, hfont, bounds, foreColor, flags, backColor);
         }
 
         private static User32.DT GetTextFormatFlags(TextFormatFlags flags)
         {
-            if (((uint)flags & WindowsGraphics.GdiUnsupportedFlagMask) == 0)
+            if (((uint)flags & GdiUnsupportedFlagMask) == 0)
             {
                 return (User32.DT)flags;
             }
 
             // Clear TextRenderer custom flags.
-            User32.DT windowsGraphicsSupportedFlags = (User32.DT)(((uint)flags) & ~WindowsGraphics.GdiUnsupportedFlagMask);
+            User32.DT windowsGraphicsSupportedFlags = (User32.DT)((uint)flags & ~GdiUnsupportedFlagMask);
 
             return windowsGraphicsSupportedFlags;
         }
 
         public static Size MeasureText(string? text, Font? font)
-            => MeasureTextInternal(text, font, WindowsGraphics.MaxSize);
+            => MeasureTextInternal(text, font, MaxSize);
 
         public static Size MeasureText(string? text, Font? font, Size proposedSize)
             => MeasureTextInternal(text, font, proposedSize);
@@ -126,7 +131,7 @@ namespace System.Windows.Forms
             => MeasureTextInternal(text, font, proposedSize, flags);
 
         public static Size MeasureText(IDeviceContext dc, string? text, Font? font)
-            => MeasureTextInternal(dc, text, font, WindowsGraphics.MaxSize);
+            => MeasureTextInternal(dc, text, font, MaxSize);
 
         public static Size MeasureText(IDeviceContext dc, string? text, Font? font, Size proposedSize)
             => MeasureTextInternal(dc, text, font, proposedSize);
@@ -148,8 +153,10 @@ namespace System.Windows.Forms
             if (string.IsNullOrEmpty(text))
                 return Size.Empty;
 
-            using WindowsFont? wf = WindowsGraphicsCacheManager.GetWindowsFont(font);
-            return WindowsGraphicsCacheManager.MeasurementGraphics.MeasureText(text, wf, proposedSize, GetTextFormatFlags(flags));
+            using var hfont = GdiCache.GetHFONT(font);
+            using var screen = GdiCache.GetScreenDC();
+
+            return screen.HDC.MeasureText(text, hfont, proposedSize, GetTextFormatFlags(flags));
         }
 
         private static Size MeasureTextInternal(
@@ -168,9 +175,9 @@ namespace System.Windows.Forms
             // This MUST come before retreiving the HDC, which locks the Graphics object
             Gdi32.QUALITY quality = FontQualityFromTextRenderingHint(dc);
 
-            using var wg = WindowsGraphics.FromDeviceContext(dc, flags);
-            using var wf = WindowsGraphicsCacheManager.GetWindowsFont(font, quality);
-            return wg.MeasureText(text, wf, proposedSize, GetTextFormatFlags(flags));
+            using var hdc = new DeviceContextHdcScope(dc);
+            using var hfont = GdiCache.GetHFONT(font, quality);
+            return hdc.MeasureText(text, hfont, proposedSize, GetTextFormatFlags(flags));
         }
 
         internal static Color DisabledTextColor(Color backColor)
