@@ -9,13 +9,10 @@ namespace System.Windows.Forms
 {
     internal static class GdiCache
     {
-        [ThreadStatic]
-        private static ScreenDcCache? s_dcCache;
+        private static ScreenDcCache s_dcCache = new ScreenDcCache();
         private static readonly FontCache s_fontCache = new FontCache();
 
-        private static ScreenDcCache DcCache => s_dcCache ??= new ScreenDcCache();
-
-        public static ScreenDcCache.ScreenDcScope GetScreenDC() => DcCache.Acquire();
+        public static ScreenDcCache.ScreenDcScope GetScreenDC() => s_dcCache.Acquire();
 
         public static ScreenGraphicsScope GetScreenDCGraphics()
         {

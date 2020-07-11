@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using static Interop;
@@ -9,20 +11,45 @@ using static Interop;
 namespace System.Windows.Forms
 {
     /// <summary>
-    ///  Cache of screen device contexts. This MUST be used only from one thread.
+    ///  Thread safe collection of screen device contexts.
     /// </summary>
     internal sealed class ScreenDcCache : IDisposable
     {
         private readonly IntPtr[] _itemsCache;
+        private readonly Thread _thread;
+        private readonly ThreadWorker _worker;
+        private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
 
         /// <summary>
         ///  Create a cache with space for the specified number of items.
         /// </summary>
         public ScreenDcCache(int cacheSpace = 5)
         {
+            _worker = new ThreadWorker(_tokenSource.Token);
+
+            // We need a thread that doesn't ever finish to create HDCs on so they'll stay valid for all threads
+            // in the process for the life of the process.
+
+            _thread = new Thread(_worker.Start)
+            {
+                Name = "WinForms Background Worker",
+                IsBackground = true
+            };
+            _thread.Start();
+
             Debug.Assert(cacheSpace > 0);
 
             _itemsCache = new IntPtr[cacheSpace];
+
+            // Create an initial stash of screen dc's
+            _worker.QueueAndWaitForCompletion(() =>
+            {
+                int max = Math.Min(cacheSpace, 5);
+                for (int i = 0; i < max; i++)
+                {
+                    _itemsCache[i] = (IntPtr)Gdi32.CreateCompatibleDC(default);
+                }
+            });
         }
 
         /// <summary>
@@ -39,7 +66,9 @@ namespace System.Windows.Forms
                     return new ScreenDcScope(this, (Gdi32.HDC)item);
             }
 
-            return new ScreenDcScope(this, Gdi32.CreateCompatibleDC(default));
+            Gdi32.HDC newDc = default;
+            _worker.QueueAndWaitForCompletion(() => newDc = Gdi32.CreateCompatibleDC(default));
+            return new ScreenDcScope(this, newDc);
         }
 
         /// <summary>
@@ -63,11 +92,6 @@ namespace System.Windows.Forms
             Gdi32.DeleteDC((Gdi32.HDC)temp);
         }
 
-        ~ScreenDcCache()
-        {
-            Dispose(false);
-        }
-
         public void Dispose()
         {
             Dispose(disposing: true);
@@ -76,13 +100,19 @@ namespace System.Windows.Forms
 
         private void Dispose(bool disposing)
         {
-            for (int i = 0; i < _itemsCache.Length; i++)
+            if (disposing)
             {
-                IntPtr hdc = _itemsCache[i];
-                if (hdc != IntPtr.Zero)
+                for (int i = 0; i < _itemsCache.Length; i++)
                 {
-                    Gdi32.DeleteDC((Gdi32.HDC)hdc);
+                    IntPtr hdc = _itemsCache[i];
+                    if (hdc != IntPtr.Zero)
+                    {
+                        Gdi32.DeleteDC((Gdi32.HDC)hdc);
+                    }
                 }
+
+                _tokenSource.Cancel();
+                _tokenSource.Dispose();
             }
         }
 
@@ -102,6 +132,63 @@ namespace System.Windows.Forms
             public void Dispose()
             {
                 _cache.Release(HDC);
+            }
+        }
+
+        private class ThreadWorker
+        {
+            private readonly object _lock = new object();
+            private readonly ManualResetEventSlim _pending = new ManualResetEventSlim(initialState: true);
+            private readonly Queue<Action> _workQueue = new Queue<Action>();
+            private readonly CancellationToken _cancellationToken;
+
+            public ThreadWorker(CancellationToken token) => _cancellationToken = token;
+
+            public void Start()
+            {
+                while (!_cancellationToken.IsCancellationRequested)
+                {
+                    // Sit idle until there is work to do.
+                    _pending.Wait(_cancellationToken);
+
+                    lock (_lock)
+                    {
+                        while (_workQueue.TryDequeue(out Action? action))
+                        {
+                            action.Invoke();
+                        }
+
+                        // Keep Set() and Reset() in the lock to avoid resetting after setting without actually
+                        // dequeueing the work item.
+                        _pending.Reset();
+                    }
+                }
+            }
+
+            public void QueueAndWaitForCompletion(Action action)
+            {
+                ManualResetEventSlim finished = new ManualResetEventSlim();
+
+                void trackAction()
+                {
+                    action();
+                    finished.Set();
+                }
+
+                lock (_lock)
+                {
+                    _workQueue.Enqueue(trackAction);
+                    _pending.Set();
+                }
+
+#if DEBUG
+                if (!finished.Wait(50))
+                {
+                    throw new TimeoutException("Failed to get an HDC");
+                }
+#else
+                finished.Wait();
+#endif
             }
         }
     }
