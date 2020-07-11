@@ -9,15 +9,13 @@ namespace System.Windows.Forms
 {
     internal static class GdiCache
     {
-        private static readonly ScreenDcCache s_dcCache = new ScreenDcCache();
+        [ThreadStatic]
+        private static ScreenDcCache? s_dcCache;
         private static readonly FontCache s_fontCache = new FontCache();
 
-        static GdiCache()
-        {
-            AppDomain.CurrentDomain.DomainUnload += CurrentDomain_DomainUnload;
-        }
+        private static ScreenDcCache DcCache => s_dcCache ??= new ScreenDcCache();
 
-        public static ScreenDcCache.ScreenDcScope GetScreenDC() => s_dcCache.Acquire();
+        public static ScreenDcCache.ScreenDcScope GetScreenDC() => DcCache.Acquire();
 
         public static ScreenGraphicsScope GetScreenDCGraphics()
         {
@@ -46,12 +44,6 @@ namespace System.Windows.Forms
                 Graphics?.Dispose();
                 _dcScope.Dispose();
             }
-        }
-
-        private static void CurrentDomain_DomainUnload(object? sender, EventArgs e)
-        {
-            s_dcCache.Dispose();
-            s_fontCache.Dispose();
         }
     }
 }
