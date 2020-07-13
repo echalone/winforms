@@ -33,7 +33,7 @@ namespace System.Windows.Forms
             _thread = new Thread(_worker.Start)
             {
                 Name = "WinForms Background Worker",
-                IsBackground = true
+                // IsBackground = true
             };
             _thread.Start();
 
