@@ -121,19 +121,14 @@ namespace System.Windows.Forms.ComponentModel.Com2Interop
         /// <summary>
         ///  Our map of native types that we can map to managed types for editors
         /// </summary>
-        private static readonly IDictionary oleConverters;
-
-        static Com2PropertyDescriptor()
+        private static readonly IDictionary oleConverters = new SortedList
         {
-            oleConverters = new SortedList
-            {
-                [GUID_COLOR] = typeof(Com2ColorConverter),
-                [typeof(IFontDisp).GUID] = typeof(Com2FontConverter),
-                [typeof(IFont).GUID] = typeof(Com2FontConverter),
-                [typeof(IPictureDisp).GUID] = typeof(Com2PictureConverter),
-                [typeof(IPicture).GUID] = typeof(Com2PictureConverter)
-            };
-        }
+            [GUID_COLOR] = typeof(Com2ColorConverter),
+            [typeof(IFontDisp).GUID] = typeof(Com2FontConverter),
+            [typeof(IFont).GUID] = typeof(Com2FontConverter),
+            [typeof(IPictureDisp).GUID] = typeof(Com2PictureConverter),
+            [typeof(IPicture).GUID] = typeof(Com2PictureConverter)
+        };
 
         /// <summary>
         ///  Should we convert our type?
@@ -1257,7 +1252,6 @@ namespace System.Windows.Forms.ComponentModel.Com2Interop
             Marshal.GetNativeVariantForObject(value, (IntPtr)(&variant));
             dispParams.rgvarg = &variant;
             Guid g = Guid.Empty;
-            uint pArgError = 0;
             HRESULT hr = pDisp.Invoke(
                 dispid,
                 &g,
@@ -1266,7 +1260,7 @@ namespace System.Windows.Forms.ComponentModel.Com2Interop
                 &dispParams,
                 null,
                 &excepInfo,
-                &pArgError);
+                null);
 
             string errorInfo = null;
             if (hr == HRESULT.DISP_E_EXCEPTION && excepInfo.scode != 0)
@@ -1313,7 +1307,7 @@ namespace System.Windows.Forms.ComponentModel.Com2Interop
                             Kernel32.FormatMessageOptions.FROM_SYSTEM | Kernel32.FormatMessageOptions.IGNORE_INSERTS,
                             IntPtr.Zero,
                             (uint)hr,
-                            (uint)CultureInfo.CurrentCulture.LCID,
+                            Kernel32.GetThreadLocale().RawValue,
                             strMessage,
                             255,
                             IntPtr.Zero);

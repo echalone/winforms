@@ -4,6 +4,7 @@
 
 using System;
 using System.Drawing;
+using System.Diagnostics;
 
 internal static partial class Interop
 {
@@ -16,7 +17,11 @@ internal static partial class Interop
         ///  Use in a <see langword="using" /> statement. If you must pass this around, always pass
         ///  by <see langword="ref" /> to avoid duplicating the handle and risking a double delete.
         /// </remarks>
-        public readonly ref struct CreatePenScope
+#if DEBUG
+        internal class CreatePenScope : DisposalTracking.Tracker, IDisposable
+#else
+        internal readonly ref struct CreatePenScope
+#endif
         {
             public HPEN HPen { get; }
 
@@ -34,6 +39,7 @@ internal static partial class Interop
             }
 
             public static implicit operator HPEN(in CreatePenScope scope) => scope.HPen;
+            public static implicit operator HGDIOBJ(in CreatePenScope scope) => scope.HPen;
 
             public bool IsNull => HPen.IsNull;
 
@@ -43,6 +49,10 @@ internal static partial class Interop
                 {
                     DeleteObject(HPen);
                 }
+
+#if DEBUG
+                GC.SuppressFinalize(this);
+#endif
             }
         }
     }

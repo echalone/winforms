@@ -14,7 +14,6 @@ namespace System.Windows.Forms.ButtonInternal
 
         internal override void PaintUp(PaintEventArgs e, CheckState state)
         {
-            Graphics g = e.Graphics;
             if (Control.Appearance == Appearance.Button)
             {
                 ButtonPopupAdapter adapter = new ButtonPopupAdapter(Control);
@@ -22,14 +21,19 @@ namespace System.Windows.Forms.ButtonInternal
             }
             else
             {
-                ColorData colors = PaintPopupRender(e.Graphics).Calculate();
+                ColorData colors = PaintPopupRender(e).Calculate();
                 LayoutData layout = Layout(e).Layout();
 
                 PaintButtonBackground(e, Control.ClientRectangle, null);
 
                 PaintImage(e, layout);
 
-                DrawCheckBackgroundFlat(e, layout.checkBounds, colors.buttonShadow, colors.options.highContrast ? colors.buttonFace : colors.highlight);
+                DrawCheckBackgroundFlat(
+                    e,
+                    layout.checkBounds,
+                    colors.buttonShadow,
+                    colors.options.HighContrast ? colors.buttonFace : colors.highlight);
+
                 DrawCheckOnly(e, layout, colors.windowText, colors.highlight, true);
 
                 AdjustFocusRectangle(layout);
@@ -39,7 +43,6 @@ namespace System.Windows.Forms.ButtonInternal
 
         internal override void PaintOver(PaintEventArgs e, CheckState state)
         {
-            Graphics g = e.Graphics;
             if (Control.Appearance == Appearance.Button)
             {
                 ButtonPopupAdapter adapter = new ButtonPopupAdapter(Control);
@@ -47,15 +50,15 @@ namespace System.Windows.Forms.ButtonInternal
             }
             else
             {
-                ColorData colors = PaintPopupRender(e.Graphics).Calculate();
+                ColorData colors = PaintPopupRender(e).Calculate();
                 LayoutData layout = Layout(e).Layout();
 
                 PaintButtonBackground(e, Control.ClientRectangle, null);
 
                 PaintImage(e, layout);
 
-                Color checkBackgroundColor = colors.options.highContrast ? colors.buttonFace : colors.highlight;
-                DrawCheckBackground3DLite(e, layout.checkBounds, colors.windowText, checkBackgroundColor, colors, true);
+                Color checkBackgroundColor = colors.options.HighContrast ? colors.buttonFace : colors.highlight;
+                DrawCheckBackground3DLite(e, layout.checkBounds, checkBackgroundColor, colors, true);
                 DrawCheckOnly(e, layout, colors.windowText, colors.highlight, true);
 
                 AdjustFocusRectangle(layout);
@@ -65,7 +68,6 @@ namespace System.Windows.Forms.ButtonInternal
 
         internal override void PaintDown(PaintEventArgs e, CheckState state)
         {
-            Graphics g = e.Graphics;
             if (Control.Appearance == Appearance.Button)
             {
                 ButtonPopupAdapter adapter = new ButtonPopupAdapter(Control);
@@ -73,14 +75,14 @@ namespace System.Windows.Forms.ButtonInternal
             }
             else
             {
-                ColorData colors = PaintPopupRender(e.Graphics).Calculate();
+                ColorData colors = PaintPopupRender(e).Calculate();
                 LayoutData layout = Layout(e).Layout();
 
                 PaintButtonBackground(e, Control.ClientRectangle, null);
 
                 PaintImage(e, layout);
 
-                DrawCheckBackground3DLite(e, layout.checkBounds, colors.windowText, colors.highlight, colors, true);
+                DrawCheckBackground3DLite(e, layout.checkBounds, colors.highlight, colors, true);
                 DrawCheckOnly(e, layout, colors.buttonShadow, colors.highlight, true);
 
                 AdjustFocusRectangle(layout);

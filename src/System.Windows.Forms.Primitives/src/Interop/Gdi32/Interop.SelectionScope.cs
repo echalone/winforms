@@ -16,23 +16,45 @@ internal static partial class Interop
         ///  Use in a <see langword="using" /> statement. If you must pass this around, always pass
         ///  by <see langword="ref" /> to avoid duplicating the handle and risking a double selection.
         /// </remarks>
+#if DEBUG
+        internal class SelectObjectScope : DisposalTracking.Tracker, IDisposable
+#else
         internal readonly ref struct SelectObjectScope
+#endif
         {
             private readonly HDC _hdc;
             public HGDIOBJ PreviousObject { get; }
 
             /// <summary>
-            ///  Selects <paramref name="object"/> into the given <paramref name="hdc"/>.
+            ///  Selects <paramref name="object"/> into the given <paramref name="hdc"/> using
+            ///  <see cref="SelectObject(HDC, HGDIOBJ)"/>.
             /// </summary>
             public SelectObjectScope(HDC hdc, HGDIOBJ @object)
             {
-                _hdc = hdc;
-                PreviousObject = SelectObject(hdc, @object);
+                // Selecting null doesn't mean anything
+
+                if (@object.IsNull)
+                {
+                    _hdc = default;
+                    PreviousObject = default;
+                }
+                else
+                {
+                    _hdc = hdc;
+                    PreviousObject = SelectObject(hdc, @object);
+                }
             }
 
             public void Dispose()
             {
-                SelectObject(_hdc, PreviousObject);
+                if (!_hdc.IsNull)
+                {
+                    SelectObject(_hdc, PreviousObject);
+                }
+
+#if DEBUG
+                GC.SuppressFinalize(this);
+#endif
             }
         }
     }

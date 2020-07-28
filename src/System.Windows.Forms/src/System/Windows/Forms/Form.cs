@@ -4146,7 +4146,7 @@ namespace System.Windows.Forms
             base.OnPaint(e);
             if (formState[FormStateRenderSizeGrip] != 0)
             {
-                Size sz = ClientSize;
+                Size size = ClientSize;
                 if (Application.RenderWithVisualStyles)
                 {
                     if (sizeGripRenderer == null)
@@ -4154,17 +4154,26 @@ namespace System.Windows.Forms
                         sizeGripRenderer = new VisualStyleRenderer(VisualStyleElement.Status.Gripper.Normal);
                     }
 
-                    sizeGripRenderer.DrawBackground(e.Graphics, new Rectangle(sz.Width - SizeGripSize, sz.Height - SizeGripSize, SizeGripSize, SizeGripSize));
+                    using var hdc = new DeviceContextHdcScope(e);
+                    sizeGripRenderer.DrawBackground(
+                        hdc,
+                        new Rectangle(size.Width - SizeGripSize, size.Height - SizeGripSize, SizeGripSize, SizeGripSize));
                 }
                 else
                 {
-                    ControlPaint.DrawSizeGrip(e.Graphics, BackColor, sz.Width - SizeGripSize, sz.Height - SizeGripSize, SizeGripSize, SizeGripSize);
+                    ControlPaint.DrawSizeGrip(
+                        e,
+                        BackColor,
+                        size.Width - SizeGripSize,
+                        size.Height - SizeGripSize,
+                        SizeGripSize,
+                        SizeGripSize);
                 }
             }
 
             if (IsMdiContainer)
             {
-                e.Graphics.FillRectangle(SystemBrushes.AppWorkspace, ClientRectangle);
+                e.GraphicsInternal.FillRectangle(SystemBrushes.AppWorkspace, ClientRectangle);
             }
         }
 
@@ -5673,7 +5682,7 @@ namespace System.Windows.Forms
                 {
                     if (ActiveMdiChildInternal.ControlBox)
                     {
-                        Debug.WriteLineIf(ToolStrip.MDIMergeDebug.TraceVerbose, "UpdateMdiControlStrip: Detected ControlBox on ActiveMDI child, adding in MDIControlStrip.");
+                        Debug.WriteLineIf(ToolStrip.s_mdiMergeDebug.TraceVerbose, "UpdateMdiControlStrip: Detected ControlBox on ActiveMDI child, adding in MDIControlStrip.");
 
                         // determine if we need to add control gadgets into the MenuStrip
                         // double check GetMenu incase someone is using interop
@@ -5684,10 +5693,10 @@ namespace System.Windows.Forms
                             if (sourceMenuStrip != null)
                             {
                                 MdiControlStrip = new MdiControlStrip(ActiveMdiChildInternal);
-                                Debug.WriteLineIf(ToolStrip.MDIMergeDebug.TraceVerbose, "UpdateMdiControlStrip: built up an MDI control strip for " + ActiveMdiChildInternal.Text + " with " + MdiControlStrip.Items.Count.ToString(CultureInfo.InvariantCulture) + " items.");
-                                Debug.WriteLineIf(ToolStrip.MDIMergeDebug.TraceVerbose, "UpdateMdiControlStrip: merging MDI control strip into source menustrip - items before: " + sourceMenuStrip.Items.Count.ToString(CultureInfo.InvariantCulture));
+                                Debug.WriteLineIf(ToolStrip.s_mdiMergeDebug.TraceVerbose, "UpdateMdiControlStrip: built up an MDI control strip for " + ActiveMdiChildInternal.Text + " with " + MdiControlStrip.Items.Count.ToString(CultureInfo.InvariantCulture) + " items.");
+                                Debug.WriteLineIf(ToolStrip.s_mdiMergeDebug.TraceVerbose, "UpdateMdiControlStrip: merging MDI control strip into source menustrip - items before: " + sourceMenuStrip.Items.Count.ToString(CultureInfo.InvariantCulture));
                                 ToolStripManager.Merge(MdiControlStrip, sourceMenuStrip);
-                                Debug.WriteLineIf(ToolStrip.MDIMergeDebug.TraceVerbose, "UpdateMdiControlStrip: merging MDI control strip into source menustrip - items after: " + sourceMenuStrip.Items.Count.ToString(CultureInfo.InvariantCulture));
+                                Debug.WriteLineIf(ToolStrip.s_mdiMergeDebug.TraceVerbose, "UpdateMdiControlStrip: merging MDI control strip into source menustrip - items after: " + sourceMenuStrip.Items.Count.ToString(CultureInfo.InvariantCulture));
                                 MdiControlStrip.MergedMenu = sourceMenuStrip;
                             }
                         }

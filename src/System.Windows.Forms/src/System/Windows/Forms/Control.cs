@@ -11,14 +11,13 @@ using System.ComponentModel.Design;
 using System.ComponentModel.Design.Serialization;
 using System.Diagnostics;
 using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms.Automation;
-using System.Windows.Forms.Internal;
 using System.Windows.Forms.Layout;
 using Accessibility;
 using Microsoft.Win32;
@@ -64,11 +63,22 @@ namespace System.Windows.Forms
         IHandle
     {
 #if DEBUG
-        internal static readonly TraceSwitch s_paletteTracing = new TraceSwitch("PaletteTracing", "Debug Palette code");
-        internal static readonly TraceSwitch s_controlKeyboardRouting = new TraceSwitch("ControlKeyboardRouting", "Debug Keyboard routing for controls");
-        private protected static readonly TraceSwitch s_focusTracing = new TraceSwitch("FocusTracing", "Debug focus/active control/enter/leave");
-        private static readonly BooleanSwitch s_assertOnControlCreateSwitch = new BooleanSwitch("AssertOnControlCreate", "Assert when anything directly deriving from control is created.");
-        private protected static readonly BooleanSwitch s_traceMnemonicProcessing = new BooleanSwitch("TraceCanProcessMnemonic", "Trace mnemonic processing calls to assure right child-parent call ordering.");
+        internal static readonly TraceSwitch s_paletteTracing = new TraceSwitch(
+            "PaletteTracing",
+            "Debug Palette code");
+        internal static readonly TraceSwitch s_controlKeyboardRouting = new TraceSwitch(
+            "ControlKeyboardRouting",
+            "Debug Keyboard routing for controls");
+        private protected static readonly TraceSwitch s_focusTracing = new TraceSwitch(
+            "FocusTracing",
+            "Debug focus/active control/enter/leave");
+
+        private static readonly BooleanSwitch s_assertOnControlCreateSwitch = new BooleanSwitch(
+            "AssertOnControlCreate",
+            "Assert when anything directly deriving from control is created.");
+        private protected static readonly BooleanSwitch s_traceMnemonicProcessing = new BooleanSwitch(
+            "TraceCanProcessMnemonic",
+            "Trace mnemonic processing calls to assure right child-parent call ordering.");
 
         private protected void TraceCanProcessMnemonic()
         {
@@ -115,8 +125,12 @@ namespace System.Windows.Forms
 #endif
 
 #if DEBUG
-        private static readonly BooleanSwitch s_bufferPinkRect = new BooleanSwitch("BufferPinkRect", "Renders a pink rectangle with painting double buffered controls");
-        private static readonly BooleanSwitch s_bufferDisabled = new BooleanSwitch("BufferDisabled", "Makes double buffered controls non-double buffered");
+        private static readonly BooleanSwitch s_bufferPinkRect = new BooleanSwitch(
+            "BufferPinkRect",
+            "Renders a pink rectangle with painting double buffered controls");
+        private static readonly BooleanSwitch s_bufferDisabled = new BooleanSwitch(
+            "BufferDisabled",
+            "Makes double buffered controls non-double buffered");
 #endif
 
         private static readonly User32.WM WM_GETCONTROLNAME = User32.RegisterWindowMessageW("WM_GETCONTROLNAME");
@@ -202,8 +216,6 @@ namespace System.Windows.Forms
         [ThreadStatic]
         internal static HelpInfo t_currentHelpInfo = null;
 
-        [ThreadStatic]
-        private static byte[] t_tempKeyboardStateArray;
 #pragma warning restore IDE1006
 
         private static FontHandleWrapper s_defaultFontHandleWrapper;
@@ -853,9 +865,9 @@ namespace System.Windows.Forms
                 Color color = BackColor;
                 Gdi32.HBRUSH backBrush;
 
-                if (ColorTranslator.ToOle(color) < 0)
+                if (color.IsSystemColor)
                 {
-                    backBrush = User32.GetSysColorBrush(ColorTranslator.ToOle(color) & 0xFF);
+                    backBrush = User32.GetSysColorBrush(color);
                     SetState(States.OwnCtlBrush, false);
                 }
                 else
@@ -2636,27 +2648,26 @@ namespace System.Windows.Forms
         {
             get
             {
-                using (new MultithreadSafeCallScope())
+                using var scope = MultithreadSafeCallScope.Create();
+
+                Control control;
+                if (IsHandleCreated)
                 {
-                    Control control;
-                    if (IsHandleCreated)
-                    {
-                        control = this;
-                    }
-                    else
-                    {
-                        Control marshalingControl = FindMarshalingControl();
-
-                        if (!marshalingControl.IsHandleCreated)
-                        {
-                            return false;
-                        }
-
-                        control = marshalingControl;
-                    }
-
-                    return User32.GetWindowThreadProcessId(control, out _) != Kernel32.GetCurrentThreadId();
+                    control = this;
                 }
+                else
+                {
+                    Control marshalingControl = FindMarshalingControl();
+
+                    if (!marshalingControl.IsHandleCreated)
+                    {
+                        return false;
+                    }
+
+                    control = marshalingControl;
+                }
+
+                return User32.GetWindowThreadProcessId(control, out _) != Kernel32.GetCurrentThreadId();
             }
         }
 
@@ -3942,10 +3953,8 @@ namespace System.Windows.Forms
                     }
                 }
 
-                using (new MultithreadSafeCallScope())
-                {
-                    return User32.GetWindowText(new HandleRef(_window, Handle));
-                }
+                using var scope = MultithreadSafeCallScope.Create();
+                return User32.GetWindowText(new HandleRef(_window, Handle));
             }
             set
             {
@@ -4668,11 +4677,9 @@ namespace System.Windows.Forms
         [EditorBrowsable(EditorBrowsableState.Advanced)]
         public IAsyncResult BeginInvoke(Delegate method, params object[] args)
         {
-            using (new MultithreadSafeCallScope())
-            {
-                Control marshaler = FindMarshalingControl();
-                return (IAsyncResult)marshaler.MarshaledInvoke(this, method, args, false);
-            }
+            using var scope = MultithreadSafeCallScope.Create();
+            Control marshaler = FindMarshalingControl();
+            return (IAsyncResult)marshaler.MarshaledInvoke(this, method, args, false);
         }
 
         internal void BeginUpdateInternal()
@@ -4852,10 +4859,8 @@ namespace System.Windows.Forms
         /// </summary>
         public Graphics CreateGraphics()
         {
-            using (new MultithreadSafeCallScope())
-            {
-                return CreateGraphicsInternal();
-            }
+            using var scope = MultithreadSafeCallScope.Create();
+            return CreateGraphicsInternal();
         }
 
         internal Graphics CreateGraphicsInternal()
@@ -5309,12 +5314,11 @@ namespace System.Windows.Forms
         [EditorBrowsable(EditorBrowsableState.Advanced)]
         public object EndInvoke(IAsyncResult asyncResult)
         {
-            using (new MultithreadSafeCallScope())
+            using var scope = MultithreadSafeCallScope.Create();
+            if (asyncResult == null)
             {
-                if (asyncResult == null)
-                {
-                    throw new ArgumentNullException(nameof(asyncResult));
-                }
+                throw new ArgumentNullException(nameof(asyncResult));
+            }
 
                 if (!(asyncResult is ThreadMethodEntry entry))
                 {
@@ -5322,27 +5326,26 @@ namespace System.Windows.Forms
                 }
                 Debug.Assert(this == entry._caller, "Called BeginInvoke on one control, and the corresponding EndInvoke on a different control");
 
-                if (!asyncResult.IsCompleted)
+            if (!asyncResult.IsCompleted)
+            {
+                Control marshaler = FindMarshalingControl();
+                if (User32.GetWindowThreadProcessId(marshaler, out _) == Kernel32.GetCurrentThreadId())
                 {
-                    Control marshaler = FindMarshalingControl();
-                    if (User32.GetWindowThreadProcessId(marshaler, out _) == Kernel32.GetCurrentThreadId())
-                    {
-                        marshaler.InvokeMarshaledCallbacks();
-                    }
-                    else
-                    {
-                        marshaler = entry._marshaler;
-                        marshaler.WaitForWaitHandle(asyncResult.AsyncWaitHandle);
-                    }
+                    marshaler.InvokeMarshaledCallbacks();
                 }
-
-                Debug.Assert(asyncResult.IsCompleted, "Why isn't this asyncResult done yet?");
-                if (entry._exception != null)
+                else
                 {
-                    throw entry._exception;
+                    marshaler = entry._marshaler;
+                    marshaler.WaitForWaitHandle(asyncResult.AsyncWaitHandle);
                 }
-                return entry._retVal;
             }
+
+            Debug.Assert(asyncResult.IsCompleted, "Why isn't this asyncResult done yet?");
+            if (entry._exception != null)
+            {
+                throw entry._exception;
+            }
+            return entry._retVal;
         }
 
         internal bool EndUpdateInternal()
@@ -5756,12 +5759,13 @@ namespace System.Windows.Forms
         }
 
         /// <summary>
-        ///  - Returns native child windows sorted according to their TabIndex property order.
-        ///  - Controls with the same TabIndex remain in original relative child index order (= z-order).
-        ///  - Child windows with no corresponding Control objects (and therefore no discernable TabIndex)
-        ///  are sorted to the front of the list (but remain in relative z-order to one another).
-        ///  - This version returns a sorted array of integers, representing the original z-order
-        ///  based indexes of the native child windows.
+        ///  Returns native child windows sorted according to their TabIndex property order. Controls with the same
+        ///  TabIndex remain in original relative child index order (= z-order). Child windows with no corresponding
+        ///  Control objects (and therefore no discernable TabIndex) are sorted to the front of the list (but remain
+        ///  in relative z-order to one another).
+        ///
+        ///  This version returns a sorted array of integers, representing the original z-order based indexes of the
+        ///  native child windows.
         /// </summary>
         private int[] GetChildWindowsInTabOrder()
         {
@@ -5788,9 +5792,10 @@ namespace System.Windows.Forms
         }
 
         /// <summary>
-        ///  - Returns child controls sorted according to their TabIndex property order.
-        ///  - Controls with the same TabIndex remain in original relative child index order (= z-order).
-        ///  - This version returns a sorted array of control references.
+        ///  Returns child controls sorted according to their TabIndex property order. Controls with the same TabIndex
+        ///  remain in original relative child index order (= z-order).
+        ///
+        ///  This version returns a sorted array of control references.
         /// </summary>
         internal Control[] GetChildControlsInTabOrder(bool handleCreatedOnly)
         {
@@ -6176,13 +6181,11 @@ namespace System.Windows.Forms
                 else
                 {
                     // It's safe to invoke InvalidateRgn from a separate thread.
-                    using (new MultithreadSafeCallScope())
-                    {
-                        User32.InvalidateRgn(
-                            this,
-                            regionHandle,
-                            (!GetStyle(ControlStyles.Opaque)).ToBOOL());
-                    }
+                    using var scope = MultithreadSafeCallScope.Create();
+                    User32.InvalidateRgn(
+                        this,
+                        regionHandle,
+                        (!GetStyle(ControlStyles.Opaque)).ToBOOL());
                 }
 
                 OnInvalidated(new InvalidateEventArgs(Rectangle.Ceiling(region.GetBounds(graphics))));
@@ -6219,13 +6222,11 @@ namespace System.Windows.Forms
                 else
                 {
                     // It's safe to invoke InvalidateRect from a separate thread.
-                    using (new MultithreadSafeCallScope())
-                    {
-                        User32.InvalidateRect(
-                            new HandleRef(_window, Handle),
-                            null,
-                            (_controlStyle & ControlStyles.Opaque) != ControlStyles.Opaque ? BOOL.TRUE : BOOL.FALSE);
-                    }
+                    using var scope = MultithreadSafeCallScope.Create();
+                    User32.InvalidateRect(
+                        new HandleRef(_window, Handle),
+                        null,
+                        (_controlStyle & ControlStyles.Opaque) != ControlStyles.Opaque ? BOOL.TRUE : BOOL.FALSE);
                 }
 
                 NotifyInvalidate(ClientRectangle);
@@ -6269,13 +6270,11 @@ namespace System.Windows.Forms
                 else
                 {
                     // It's safe to invoke InvalidateRect from a separate thread.
-                    using (new MultithreadSafeCallScope())
-                    {
-                        User32.InvalidateRect(
-                            new HandleRef(_window, Handle),
-                            &rcArea,
-                            (_controlStyle & ControlStyles.Opaque) != ControlStyles.Opaque ? BOOL.TRUE : BOOL.FALSE);
-                    }
+                    using var scope = MultithreadSafeCallScope.Create();
+                    User32.InvalidateRect(
+                        new HandleRef(_window, Handle),
+                        &rcArea,
+                        (_controlStyle & ControlStyles.Opaque) != ControlStyles.Opaque ? BOOL.TRUE : BOOL.FALSE);
                 }
                 NotifyInvalidate(rc);
             }
@@ -6315,11 +6314,9 @@ namespace System.Windows.Forms
         /// </summary>
         public object Invoke(Delegate method, params object[] args)
         {
-            using (new MultithreadSafeCallScope())
-            {
-                Control marshaler = FindMarshalingControl();
-                return marshaler.MarshaledInvoke(this, method, args, true);
-            }
+            using var scope = MultithreadSafeCallScope.Create();
+            Control marshaler = FindMarshalingControl();
+            return marshaler.MarshaledInvoke(this, method, args, true);
         }
 
         /// <summary>
@@ -7444,8 +7441,7 @@ namespace System.Windows.Forms
 
             if (GetStyle(ControlStyles.UserPaint))
             {
-                // Theme support requires that we paint the background
-                // and foreground to support semi-transparent children
+                // Theme support requires that we paint the background and foreground to support semi-transparent children
                 PaintWithErrorHandling(e, PaintLayerBackground);
                 e.ResetGraphics();
                 PaintWithErrorHandling(e, PaintLayerForeground);
@@ -7456,8 +7452,8 @@ namespace System.Windows.Forms
                 {
                     IntPtr flags = (IntPtr)(User32.PRF.CHILDREN | User32.PRF.CLIENT | User32.PRF.ERASEBKGND | User32.PRF.NONCLIENT);
 
-                    using var scope = new PaintEventHdcScope(e);
-                    Message m = Message.Create(Handle, User32.WM.PRINTCLIENT, (IntPtr)scope.HDC, flags);
+                    using var hdc = new DeviceContextHdcScope(e);
+                    Message m = Message.Create(Handle, User32.WM.PRINTCLIENT, (IntPtr)hdc, flags);
                     DefWndProc(ref m);
                 }
                 else
@@ -8216,16 +8212,13 @@ namespace System.Windows.Forms
         }
 
         /// <summary>
-        ///  Inheriting classes should override this method to handle the erase
-        ///  background request from windows. It is not necessary to call
-        ///  base.onPaintBackground, however if you do not want the default
-        ///  Windows behavior you must set event.handled to true.
+        ///  Inheriting classes should override this method to handle the erase background request from windows. It is
+        ///  not necessary to call base.OnPaintBackground.
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Advanced)]
         protected virtual void OnPaintBackground(PaintEventArgs pevent)
         {
-            // We need the true client rectangle as clip rectangle causes
-            // problems on "Windows Classic" theme.
+            // We need the true client rectangle as clip rectangle causes problems on "Windows Classic" theme.
             RECT rect = new RECT();
             User32.GetClientRect(new HandleRef(_window, InternalHandle), ref rect);
 
@@ -8399,12 +8392,15 @@ namespace System.Windows.Forms
 
         internal void PaintBackground(PaintEventArgs e, Rectangle rectangle, Color backColor, Point scrollOffset)
         {
+            if (e is null)
+                throw new ArgumentNullException(nameof(e));
+
             if (RenderColorTransparent(backColor))
             {
                 PaintTransparentBackground(e, rectangle);
             }
 
-            //If the form or mdiclient is mirrored then we do not render the background image due to GDI+ issues.
+            // If the form or mdiclient is mirrored then we do not render the background image due to GDI+ issues.
             bool formRTL = ((this is Form || this is MdiClient) && IsMirrored);
 
             // The rest of this won't do much if BackColor is transparent and there is no BackgroundImage,
@@ -8431,7 +8427,15 @@ namespace System.Windows.Forms
                     PaintBackColor(e, rectangle, backColor);
                 }
 
-                ControlPaint.DrawBackgroundImage(e.Graphics, BackgroundImage, backColor, BackgroundImageLayout, ClientRectangle, rectangle, scrollLocation, RightToLeft);
+                ControlPaint.DrawBackgroundImage(
+                    e.GraphicsInternal,
+                    BackgroundImage,
+                    backColor,
+                    BackgroundImageLayout,
+                    ClientRectangle,
+                    rectangle,
+                    scrollLocation,
+                    RightToLeft);
             }
             else
             {
@@ -8450,17 +8454,16 @@ namespace System.Windows.Forms
 
             // Note: PaintEvent.HDC == 0 if GDI+ has used the HDC -- it wouldn't be safe for us
             // to use it without enough bookkeeping to negate any performance gain of using GDI.
-            if (color.A == 255)
+            if (!color.HasTransparency())
             {
-                using var scope = new PaintEventHdcScope(e);
-                Gdi32.HDC hdc = scope.HDC;
-                using var hbrush = new Gdi32.CreateBrushScope(hdc.GetNearestColor(color));
+                using var hdc = new DeviceContextHdcScope(e);
+                using var hbrush = new Gdi32.CreateBrushScope(hdc.FindNearestColor(color));
                 hdc.FillRectangle(rectangle, hbrush);
             }
-            else if (color.A > 0)
+            else if (!color.IsFullyTransparent())
             {
                 // Color has some transparency (but not completely transparent) use GDI+.
-                using Brush brush = new SolidBrush(color);
+                using var brush = color.GetCachedSolidBrushScope();
                 e.Graphics.FillRectangle(brush, rectangle);
             }
         }
@@ -8468,24 +8471,22 @@ namespace System.Windows.Forms
         // Paints a red rectangle with a red X, painted on a white background
         private void PaintException(PaintEventArgs e)
         {
-            int penThickness = 2;
-            using (Pen pen = new Pen(Color.Red, penThickness))
-            {
-                Rectangle clientRectangle = ClientRectangle;
-                Rectangle rectangle = clientRectangle;
-                rectangle.X++;
-                rectangle.Y++;
-                rectangle.Width--;
-                rectangle.Height--;
+            // As this is unusual we won't cache the pen.
+            using Pen pen = new Pen(Color.Red, width: 2);
+            Rectangle clientRectangle = ClientRectangle;
+            Rectangle rectangle = clientRectangle;
+            rectangle.X++;
+            rectangle.Y++;
+            rectangle.Width--;
+            rectangle.Height--;
 
-                e.Graphics.DrawRectangle(pen, rectangle.X, rectangle.Y, rectangle.Width - 1, rectangle.Height - 1);
-                rectangle.Inflate(-1, -1);
-                e.Graphics.FillRectangle(Brushes.White, rectangle);
-                e.Graphics.DrawLine(pen, clientRectangle.Left, clientRectangle.Top,
-                                    clientRectangle.Right, clientRectangle.Bottom);
-                e.Graphics.DrawLine(pen, clientRectangle.Left, clientRectangle.Bottom,
-                                    clientRectangle.Right, clientRectangle.Top);
-            }
+            e.Graphics.DrawRectangle(pen, rectangle.X, rectangle.Y, rectangle.Width - 1, rectangle.Height - 1);
+            rectangle.Inflate(-1, -1);
+            e.Graphics.FillRectangle(Brushes.White, rectangle);
+            e.Graphics.DrawLine(pen, clientRectangle.Left, clientRectangle.Top,
+                                clientRectangle.Right, clientRectangle.Bottom);
+            e.Graphics.DrawLine(pen, clientRectangle.Left, clientRectangle.Bottom,
+                                clientRectangle.Right, clientRectangle.Top);
         }
 
         internal void PaintTransparentBackground(PaintEventArgs e, Rectangle rectangle)
@@ -8493,96 +8494,87 @@ namespace System.Windows.Forms
             PaintTransparentBackground(e, rectangle, null);
         }
 
-        // Trick our parent into painting our background for us, or paint some default
-        // color if that doesn't work.
-        //
-        // This method is the hardest part of implementing transparent controls;
-        // call this in your OnPaintBackground method, and away you go.
-        //
-        // If you only want a region of the control to be transparent, pass in a region into the
-        // last parameter.  A null region implies that you want the entire rectangle to be transparent.
+        /// <summary>
+        ///  Trick our parent into painting our background for us, or paint some default color if that doesn't work.
+        /// </summary>
+        /// <remarks>
+        ///  This method is the hardest part of implementing transparent controls; call this in
+        ///  <see cref="OnPaintBackground(PaintEventArgs)"/>.
+        /// </remarks>
+        /// <param name="rectangle">The area to redraw.</param>
+        /// <param name="transparentRegion">
+        ///  Region of the rectangle to be transparent, or null for the entire control.
+        /// </param>
         internal unsafe void PaintTransparentBackground(PaintEventArgs e, Rectangle rectangle, Region transparentRegion)
         {
             Control parent = ParentInternal;
 
-            if (parent != null)
-            {
-                Graphics g = e.Graphics;
-
-                // We need to use themeing painting for certain controls (like TabPage) when they parent other controls.
-                // But we dont want to to this always as this causes serious preformance (at Runtime and DesignTime)
-                // so checking for RenderTransparencyWithVisualStyles which is TRUE for TabPage and false by default.
-                if (Application.RenderWithVisualStyles && parent.RenderTransparencyWithVisualStyles)
-                {
-                    // When we are rendering with visual styles, we can use the cool DrawThemeParentBackground function
-                    // that UxTheme provides to render the parent's background. This function is control agnostic, so
-                    // we use the wrapper in ButtonRenderer - this should do the right thing for all controls,
-                    // not just Buttons.
-
-                    GraphicsState graphicsState = null;
-                    if (transparentRegion != null)
-                    {
-                        graphicsState = g.Save();
-                    }
-
-                    try
-                    {
-                        if (transparentRegion != null)
-                        {
-                            g.Clip = transparentRegion;
-                        }
-                        ButtonRenderer.DrawParentBackground(g, rectangle, this);
-                    }
-                    finally
-                    {
-                        if (graphicsState != null)
-                        {
-                            g.Restore(graphicsState);
-                        }
-                    }
-                }
-                else
-                {
-                    // how to move the rendering area and setup it's size
-                    // (we want to translate it to the parent's origin)
-                    Rectangle shift = new Rectangle(-Left, -Top, parent.Width, parent.Height);
-
-                    // moving the clipping rectangle to the parent coordinate system
-                    Rectangle newClipRect = new Rectangle(rectangle.Left + Left, rectangle.Top + Top, rectangle.Width, rectangle.Height);
-
-                    using var hdc = new PaintEventHdcScope(e);
-                    using var savedc = new Gdi32.SaveDcScope(e.HDC);
-
-                    Gdi32.OffsetViewportOrgEx(hdc, -Left, -Top, null);
-
-                    using (PaintEventArgs np = new PaintEventArgs(hdc, newClipRect))
-                    {
-                        if (transparentRegion != null)
-                        {
-                            np.Graphics.Clip = transparentRegion;
-                            np.Graphics.TranslateClip(-shift.X, -shift.Y);
-                        }
-                        try
-                        {
-                            InvokePaintBackground(parent, np);
-                            InvokePaint(parent, np);
-                        }
-                        finally
-                        {
-                            if (transparentRegion != null)
-                            {
-                                // restore region back to original state.
-                                np.Graphics.TranslateClip(shift.X, shift.Y);
-                            }
-                        }
-                    }
-                }
-            }
-            else
+            if (parent is null)
             {
                 // For whatever reason, our parent can't paint our background, but we need some kind of background
                 // since we're transparent.
-                e.Graphics.FillRectangle(SystemBrushes.Control, rectangle);
+                using var hdcNoParent = new DeviceContextHdcScope(e);
+                using var hbrush = new Gdi32.CreateBrushScope(SystemColors.Control);
+                hdcNoParent.FillRectangle(rectangle, hbrush);
+                return;
+            }
+
+            // We need to use themeing painting for certain controls (like TabPage) when they parent other controls.
+            // But we dont want to to this always as this causes serious preformance (at Runtime and DesignTime)
+            // so checking for RenderTransparencyWithVisualStyles which is TRUE for TabPage and false by default.
+            if (Application.RenderWithVisualStyles && parent.RenderTransparencyWithVisualStyles)
+            {
+                // When we are rendering with visual styles, we can use the cool DrawThemeParentBackground function
+                // that UxTheme provides to render the parent's background. This function is control agnostic, so
+                // we use the wrapper in ButtonRenderer - this should do the right thing for all controls,
+                // not just Buttons.
+
+                if (transparentRegion != null)
+                {
+                    Graphics g = e.GraphicsInternal;
+                    using var saveState = new GraphicsStateScope(g);
+                    g.Clip = transparentRegion;
+                    ButtonRenderer.DrawParentBackground(g, rectangle, this);
+                }
+                else
+                {
+                    ButtonRenderer.DrawParentBackground(e, rectangle, this);
+                }
+
+                return;
+            }
+
+            // Move the rendering area and setup it's size (we want to translate it to the parent's origin).
+            Rectangle shift = new Rectangle(-Left, -Top, parent.Width, parent.Height);
+
+            // Moving the clipping rectangle to the parent coordinate system.
+            Rectangle newClipRect = new Rectangle(
+                rectangle.Left + Left,
+                rectangle.Top + Top,
+                rectangle.Width,
+                rectangle.Height);
+
+            using var hdc = new DeviceContextHdcScope(e);
+            using var savedc = new Gdi32.SaveDcScope(hdc);
+
+            Gdi32.OffsetViewportOrgEx(hdc, -Left, -Top, null);
+
+            using PaintEventArgs newArgs = new PaintEventArgs(hdc, newClipRect);
+
+            if (transparentRegion != null)
+            {
+                using var saveState = new GraphicsStateScope(newArgs.Graphics);
+
+                // Is this clipping something we can apply directly to the HDC?
+                newArgs.Graphics.Clip = transparentRegion;
+                newArgs.Graphics.TranslateClip(-shift.X, -shift.Y);
+                InvokePaintBackground(parent, newArgs);
+                InvokePaint(parent, newArgs);
+            }
+            else
+            {
+                InvokePaintBackground(parent, newArgs);
+                InvokePaint(parent, newArgs);
             }
         }
 
@@ -9054,7 +9046,7 @@ namespace System.Windows.Forms
 
         private void PrintToMetaFile(Gdi32.HDC hDC, IntPtr lParam)
         {
-            Debug.Assert(Gdi32.GetObjectType(hDC) == Gdi32.ObjectType.OBJ_ENHMETADC,
+            Debug.Assert(Gdi32.GetObjectType(hDC) == Gdi32.OBJ.ENHMETADC,
                 "PrintToMetaFile() called with a non-Enhanced MetaFile DC.");
             Debug.Assert(((long)lParam & (long)User32.PRF.CHILDREN) != 0,
                 "PrintToMetaFile() called without PRF_CHILDREN.");
@@ -11637,10 +11629,8 @@ namespace System.Windows.Forms
 
                     RECT rc = new RECT();
                     User32.GetClientRect(this, ref rc);
-                    using (PaintEventArgs pevent = new PaintEventArgs(dc, Rectangle.FromLTRB(rc.left, rc.top, rc.right, rc.bottom)))
-                    {
-                        PaintWithErrorHandling(pevent, PaintLayerBackground);
-                    }
+                    using PaintEventArgs pevent = new PaintEventArgs(dc, Rectangle.FromLTRB(rc.left, rc.top, rc.right, rc.bottom));
+                    PaintWithErrorHandling(pevent, PaintLayerBackground);
                 }
                 m.Result = (IntPtr)1;
             }
@@ -12218,8 +12208,7 @@ namespace System.Windows.Forms
         }
 
         /// <summary>
-        ///  Handles the WM_PAINT messages.  This should only be called
-        ///  for userpaint controls.
+        ///  Handles the WM_PAINT messages.  This should only be called for userpaint controls.
         /// </summary>
         private void WmPaint(ref Message m)
         {
@@ -12232,7 +12221,9 @@ namespace System.Windows.Forms
 #endif
             Rectangle clip;
             Gdi32.HDC dc = (Gdi32.HDC)m.WParam;
-            using var paintScope = dc.IsNull ? new User32.BeginPaintScope(Handle) : default;
+
+            bool usingBeginPaint = dc.IsNull;
+            using var paintScope = usingBeginPaint ? new User32.BeginPaintScope(Handle) : default;
 
             if (dc.IsNull)
             {
@@ -12253,24 +12244,26 @@ namespace System.Windows.Forms
 
             BufferedGraphics bufferedGraphics = null;
             PaintEventArgs pevent = null;
-            GraphicsState state = null;
 
-            using var paletteScope = (doubleBuffered || m.WParam == IntPtr.Zero)
+            using var paletteScope = doubleBuffered || usingBeginPaint
                 ? Gdi32.SelectPaletteScope.HalftonePalette(dc, forceBackground: false, realizePalette: false)
                 : default;
+
+            bool paintBackground = (usingBeginPaint && GetStyle(ControlStyles.AllPaintingInWmPaint)) || doubleBuffered;
 
             if (doubleBuffered)
             {
                 try
                 {
                     bufferedGraphics = BufferContext.Allocate((IntPtr)dc, ClientRectangle);
+
 #if DEBUG
                     if (s_bufferPinkRect.Enabled)
                     {
                         Rectangle band = ClientRectangle;
                         using (BufferedGraphics bufferedGraphics2 = BufferContext.Allocate((IntPtr)dc, band))
                         {
-                            bufferedGraphics2.Graphics.FillRectangle(new SolidBrush(Color.Red), band);
+                            bufferedGraphics2.Graphics.FillRectangle(Brushes.Red, band);
                             bufferedGraphics2.Render();
                         }
                         Thread.Sleep(50);
@@ -12307,37 +12300,26 @@ namespace System.Windows.Forms
             if (bufferedGraphics != null)
             {
                 bufferedGraphics.Graphics.SetClip(clip);
-                pevent = new PaintEventArgs(bufferedGraphics.Graphics, clip);
-                state = pevent.Graphics.Save();
+                pevent = new PaintEventArgs(
+                    bufferedGraphics.Graphics,
+                    clip,
+                    // We've applied a Clip, so we need to apply it when we draw
+                    (paintBackground ? DrawingEventFlags.SaveState : default) | DrawingEventFlags.GraphicsStateUnclean);
             }
             else
             {
-                pevent = new PaintEventArgs(dc, clip);
+                pevent = new PaintEventArgs(
+                    dc,
+                    clip,
+                    paintBackground ? DrawingEventFlags.SaveState : default);
             }
 
             using (pevent)
             {
-                try
+                if (paintBackground)
                 {
-#pragma warning disable SA1408 // Conditional expressions should declare precedence
-                    if ((m.WParam == IntPtr.Zero) && GetStyle(ControlStyles.AllPaintingInWmPaint) || doubleBuffered)
-#pragma warning restore SA1408 // Conditional expressions should declare precedence
-                    {
-                        PaintWithErrorHandling(pevent, PaintLayerBackground);
-                        // Consider: This condition could be elimiated,
-                        //           do we have to save/restore the state of the buffered graphics?
-                    }
-                }
-                finally
-                {
-                    if (state != null)
-                    {
-                        pevent.Graphics.Restore(state);
-                    }
-                    else
-                    {
-                        pevent.ResetGraphics();
-                    }
+                    PaintWithErrorHandling(pevent, PaintLayerBackground);
+                    pevent.ResetGraphics();
                 }
 
                 PaintWithErrorHandling(pevent, PaintLayerForeground);
@@ -12353,7 +12335,13 @@ namespace System.Windows.Forms
         /// </summary>
         private void WmPrintClient(ref Message m)
         {
-            using (PaintEventArgs e = new PrintPaintEventArgs(m, (Gdi32.HDC)m.WParam, ClientRectangle))
+            Gdi32.HDC hdc = (Gdi32.HDC)m.WParam;
+            if (hdc.IsNull)
+            {
+                return;
+            }
+
+            using (PaintEventArgs e = new PrintPaintEventArgs(m, hdc, ClientRectangle))
             {
                 OnPrint(e);
             }
@@ -12362,10 +12350,14 @@ namespace System.Windows.Forms
         private void WmQueryNewPalette(ref Message m)
         {
             Debug.WriteLineIf(s_paletteTracing.TraceVerbose, $"{Handle}: WM_QUERYNEWPALETTE");
+
             using var dc = new User32.GetDcScope(Handle);
 
             // We don't want to unset the palette in this case so we don't do this in a using
-            var paletteScope = Gdi32.SelectPaletteScope.HalftonePalette(dc, forceBackground: true, realizePalette: true);
+            var paletteScope = Gdi32.SelectPaletteScope.HalftonePalette(
+                dc,
+                forceBackground: true,
+                realizePalette: true);
 
             Invalidate(true);
             m.Result = (IntPtr)1;
@@ -12754,7 +12746,9 @@ namespace System.Windows.Forms
 
                         if (ToolStripManager.ProcessMenuKey(ref m))
                         {
-                            Debug.WriteLineIf(s_controlKeyboardRouting.TraceVerbose, "Control.WndProc ToolStripManager.ProcessMenuKey returned true" + m.ToString());
+                            Debug.WriteLineIf(
+                                s_controlKeyboardRouting.TraceVerbose,
+                                "Control.WndProc ToolStripManager.ProcessMenuKey returned true" + m.ToString());
                             m.Result = IntPtr.Zero;
                             return;
                         }
@@ -13359,8 +13353,8 @@ namespace System.Windows.Forms
         HRESULT Ole32.IOleObject.SetHostNames(string szContainerApp, string szContainerObj)
         {
             Debug.WriteLineIf(CompModSwitches.ActiveX.TraceInfo, "AxSource:SetHostNames");
-            // Since ActiveX controls never "open" for editing, we shouldn't need
-            // to store these.
+
+            // Since ActiveX controls never "open" for editing, we shouldn't need to store these.
             return HRESULT.S_OK;
         }
 
@@ -13410,9 +13404,7 @@ namespace System.Windows.Forms
             IntPtr hwndParent,
             RECT* lprcPosRect)
         {
-            // In Office they are internally casting an iverb to a short and not
-            // doing the proper sign extension.  So, we do it here.
-            //
+            // In Office they are internally casting an iVerb to a short and not doing the proper sign extension.
             short sVerb = unchecked((short)iVerb);
             iVerb = (Ole32.OLEIVERB)sVerb;
 
@@ -13485,25 +13477,25 @@ namespace System.Windows.Forms
             return HRESULT.S_OK;
         }
 
-        unsafe Interop.HRESULT Ole32.IOleObject.SetExtent(Ole32.DVASPECT dwDrawAspect, Size* pSizel)
+        unsafe HRESULT Ole32.IOleObject.SetExtent(Ole32.DVASPECT dwDrawAspect, Size* pSizel)
         {
             if (pSizel == null)
             {
-                return Interop.HRESULT.E_INVALIDARG;
+                return HRESULT.E_INVALIDARG;
             }
 
             Debug.WriteLineIf(CompModSwitches.ActiveX.TraceInfo, "AxSource:SetExtent(" + pSizel->Width + ", " + pSizel->Height + ")");
             Debug.Indent();
             ActiveXInstance.SetExtent(dwDrawAspect, pSizel);
             Debug.Unindent();
-            return Interop.HRESULT.S_OK;
+            return HRESULT.S_OK;
         }
 
-        unsafe Interop.HRESULT Ole32.IOleObject.GetExtent(Ole32.DVASPECT dwDrawAspect, Size* pSizel)
+        unsafe HRESULT Ole32.IOleObject.GetExtent(Ole32.DVASPECT dwDrawAspect, Size* pSizel)
         {
             if (pSizel == null)
             {
-                return Interop.HRESULT.E_INVALIDARG;
+                return HRESULT.E_INVALIDARG;
             }
 
             Debug.WriteLineIf(CompModSwitches.ActiveX.TraceInfo, "AxSource:GetExtent.  Aspect: " + dwDrawAspect.ToString(CultureInfo.InvariantCulture));
@@ -13511,7 +13503,7 @@ namespace System.Windows.Forms
             ActiveXInstance.GetExtent(dwDrawAspect, pSizel);
             Debug.WriteLineIf(CompModSwitches.ActiveX.TraceInfo, "value: " + pSizel->Width + ", " + pSizel->Height);
             Debug.Unindent();
-            return Interop.HRESULT.S_OK;
+            return HRESULT.S_OK;
         }
 
         unsafe HRESULT Ole32.IOleObject.Advise(IAdviseSink pAdvSink, uint* pdwConnection)
@@ -13737,32 +13729,32 @@ namespace System.Windows.Forms
             return hr;
         }
 
-        unsafe Interop.HRESULT Ole32.IQuickActivate.SetContentExtent(Size* pSizel)
+        unsafe HRESULT Ole32.IQuickActivate.SetContentExtent(Size* pSizel)
         {
             if (pSizel == null)
             {
-                return Interop.HRESULT.E_INVALIDARG;
+                return HRESULT.E_INVALIDARG;
             }
 
             Debug.WriteLineIf(CompModSwitches.ActiveX.TraceInfo, "AxSource:SetContentExtent");
             Debug.Indent();
             ActiveXInstance.SetExtent(Ole32.DVASPECT.CONTENT, pSizel);
             Debug.Unindent();
-            return Interop.HRESULT.S_OK;
+            return HRESULT.S_OK;
         }
 
-        unsafe Interop.HRESULT Ole32.IQuickActivate.GetContentExtent(Size* pSizel)
+        unsafe HRESULT Ole32.IQuickActivate.GetContentExtent(Size* pSizel)
         {
             if (pSizel == null)
             {
-                return Interop.HRESULT.E_INVALIDARG;
+                return HRESULT.E_INVALIDARG;
             }
 
             Debug.WriteLineIf(CompModSwitches.ActiveX.TraceInfo, "AxSource:GetContentExtent");
             Debug.Indent();
             ActiveXInstance.GetExtent(Ole32.DVASPECT.CONTENT, pSizel);
             Debug.Unindent();
-            return Interop.HRESULT.S_OK;
+            return HRESULT.S_OK;
         }
 
         unsafe HRESULT Ole32.IViewObject.Draw(
@@ -13900,10 +13892,11 @@ namespace System.Windows.Forms
             return ActiveXInstance.GetAdvise(pAspects, pAdvf, ppAdvSink);
         }
 
-        unsafe Interop.HRESULT Ole32.IViewObject2.GetExtent(Ole32.DVASPECT dwDrawAspect, int lindex, Ole32.DVTARGETDEVICE* ptd, Size* lpsizel)
+        unsafe HRESULT Ole32.IViewObject2.GetExtent(Ole32.DVASPECT dwDrawAspect, int lindex, Ole32.DVTARGETDEVICE* ptd, Size* lpsizel)
         {
             Debug.WriteLineIf(CompModSwitches.ActiveX.TraceInfo, "AxSource:GetExtent (IViewObject2)");
-            // we already have an implementation of this [from IOleObject]
+
+            // We already have an implementation of this [from IOleObject]
             return ((Ole32.IOleObject)this).GetExtent(dwDrawAspect, lpsizel);
         }
 
@@ -13915,10 +13908,7 @@ namespace System.Windows.Forms
             return IsHandleCreated && Visible && (host == null || host.CanShowToolTipsNow());
         }
 
-        Rectangle IKeyboardToolTip.GetNativeScreenRectangle()
-        {
-            return GetToolNativeScreenRectangle();
-        }
+        Rectangle IKeyboardToolTip.GetNativeScreenRectangle() => GetToolNativeScreenRectangle();
 
         IList<Rectangle> IKeyboardToolTip.GetNeighboringToolsRectangles()
         {
@@ -13933,10 +13923,7 @@ namespace System.Windows.Forms
             }
         }
 
-        bool IKeyboardToolTip.IsHoveredWithMouse()
-        {
-            return ClientRectangle.Contains(PointToClient(MousePosition));
-        }
+        bool IKeyboardToolTip.IsHoveredWithMouse() => ClientRectangle.Contains(PointToClient(MousePosition));
 
         bool IKeyboardToolTip.HasRtlModeEnabled()
         {
@@ -13950,20 +13937,11 @@ namespace System.Windows.Forms
             return (host == null || host.AllowsToolTip()) && AllowsKeyboardToolTip();
         }
 
-        IWin32Window IKeyboardToolTip.GetOwnerWindow()
-        {
-            return this;
-        }
+        IWin32Window IKeyboardToolTip.GetOwnerWindow() => this;
 
-        void IKeyboardToolTip.OnHooked(ToolTip toolTip)
-        {
-            OnKeyboardToolTipHook(toolTip);
-        }
+        void IKeyboardToolTip.OnHooked(ToolTip toolTip) => OnKeyboardToolTipHook(toolTip);
 
-        void IKeyboardToolTip.OnUnhooked(ToolTip toolTip)
-        {
-            OnKeyboardToolTipUnhook(toolTip);
-        }
+        void IKeyboardToolTip.OnUnhooked(ToolTip toolTip) => OnKeyboardToolTipUnhook(toolTip);
 
         string IKeyboardToolTip.GetCaptionForTool(ToolTip toolTip)
         {
@@ -13999,38 +13977,32 @@ namespace System.Windows.Forms
         private IList<Rectangle> GetOwnNeighboringToolsRectangles()
         {
             Control controlParent = ParentInternal;
-            if (controlParent != null)
-            {
-                Control[] neighboringControls = new Control[4] {
-                    // Next and previous control which are accessible with Tab and Shift+Tab
-                    controlParent.GetNextSelectableControl(this, true, true, true, false),
-                    controlParent.GetNextSelectableControl(this, false, true, true, false),
-                    // Next and previous control which are accessible with arrow keys
-                    controlParent.GetNextSelectableControl(this, true, false, false, true),
-                    controlParent.GetNextSelectableControl(this, false, false, false, true)
-                };
-
-                List<Rectangle> neighboringControlsRectangles = new List<Rectangle>(4);
-                foreach (Control neighboringControl in neighboringControls)
-                {
-                    if (neighboringControl != null && neighboringControl.IsHandleCreated)
-                    {
-                        neighboringControlsRectangles.Add(((IKeyboardToolTip)neighboringControl).GetNativeScreenRectangle());
-                    }
-                }
-
-                return neighboringControlsRectangles;
-            }
-            else
+            if (controlParent is null)
             {
                 return Array.Empty<Rectangle>();
             }
+
+            List<Rectangle> neighboringControlsRectangles = new List<Rectangle>(4);
+
+            // Next and previous control which are accessible with Tab and Shift+Tab
+            AddIfCreated(controlParent.GetNextSelectableControl(this, true, true, true, false));
+            AddIfCreated(controlParent.GetNextSelectableControl(this, false, true, true, false));
+            // Next and previous control which are accessible with arrow keys
+            AddIfCreated(controlParent.GetNextSelectableControl(this, true, false, false, true));
+            AddIfCreated(controlParent.GetNextSelectableControl(this, false, false, false, true));
+
+            return neighboringControlsRectangles;
+
+            void AddIfCreated(Control control)
+            {
+                if (control?.IsHandleCreated ?? false)
+                {
+                    neighboringControlsRectangles.Add(((IKeyboardToolTip)control).GetNativeScreenRectangle());
+                }
+            }
         }
 
-        internal virtual bool ShowsOwnKeyboardToolTip()
-        {
-            return true;
-        }
+        internal virtual bool ShowsOwnKeyboardToolTip() => true;
 
         internal virtual void OnKeyboardToolTipHook(ToolTip toolTip)
         {
@@ -14042,44 +14014,47 @@ namespace System.Windows.Forms
 
         internal virtual Rectangle GetToolNativeScreenRectangle()
         {
-            var rectangle = new RECT();
+            Unsafe.SkipInit(out RECT rectangle);
             User32.GetWindowRect(this, ref rectangle);
             return rectangle;
         }
 
         internal virtual bool AllowsKeyboardToolTip()
         {
-            // This internal method enables keyboard ToolTips for all controls including the foreign descendants of Control unless this method is overridden in a child class belonging to this assembly.
-            // ElementHost is one such control which is located in a different assembly.
-            // This control doesn't show a mouse ToolTip when hovered and thus should not have a keyboard ToolTip as well.
-            // We are not going to fix it now since it seems unlikely that someone would set ToolTip on such special container control as ElementHost.
+            // This internal method enables keyboard ToolTips for all controls including the foreign descendants of
+            // Control unless this method is overridden in a child class belonging to this assembly. ElementHost is one
+            // such control which is located in a different assembly.
+            //
+            // This control doesn't show a mouse ToolTip when hovered and thus should not have a keyboard ToolTip as
+            // well. We are not going to fix it now since it seems unlikely that someone would set ToolTip on such
+            // special container control as ElementHost.
             return true;
         }
 
-        private static bool IsKeyDown(Keys key)
+        internal unsafe static bool AreCommonNavigationalKeysDown()
         {
-            return (t_tempKeyboardStateArray[(int)key] & HighOrderBitMask) != 0;
-        }
+            static bool IsKeyDown(Keys key, ReadOnlySpan<byte> stateArray)
+                => (stateArray[(int)key] & HighOrderBitMask) != 0;
 
-        internal static bool AreCommonNavigationalKeysDown()
-        {
-            if (t_tempKeyboardStateArray == null)
+            ReadOnlySpan<byte> stateArray = stackalloc byte[256];
+
+            fixed (byte* b = stateArray)
             {
-                t_tempKeyboardStateArray = new byte[256];
+                User32.GetKeyboardState(b);
+                return IsKeyDown(Keys.Tab, stateArray)
+                    || IsKeyDown(Keys.Up, stateArray)
+                    || IsKeyDown(Keys.Down, stateArray)
+                    || IsKeyDown(Keys.Left, stateArray)
+                    || IsKeyDown(Keys.Right, stateArray)
+                    // receiving focus from the ToolStrip
+                    || IsKeyDown(Keys.Menu, stateArray)
+                    || IsKeyDown(Keys.F10, stateArray)
+                    || IsKeyDown(Keys.Escape, stateArray);
             }
-            User32.GetKeyboardState(t_tempKeyboardStateArray);
-            return IsKeyDown(Keys.Tab)
-                || IsKeyDown(Keys.Up)
-                || IsKeyDown(Keys.Down)
-                || IsKeyDown(Keys.Left)
-                || IsKeyDown(Keys.Right)
-                // receiving focus from the ToolStrip
-                || IsKeyDown(Keys.Menu)
-                || IsKeyDown(Keys.F10)
-                || IsKeyDown(Keys.Escape);
         }
 
-        private readonly WeakReference<ToolStripControlHost> toolStripControlHostReference = new WeakReference<ToolStripControlHost>(null);
+        private readonly WeakReference<ToolStripControlHost> toolStripControlHostReference
+            = new WeakReference<ToolStripControlHost>(null);
 
         internal ToolStripControlHost ToolStripControlHost
         {

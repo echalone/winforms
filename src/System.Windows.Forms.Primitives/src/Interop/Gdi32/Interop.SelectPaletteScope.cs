@@ -16,7 +16,11 @@ internal static partial class Interop
         ///  Use in a <see langword="using" /> statement. If you must pass this around, always pass
         ///  by <see langword="ref" /> to avoid duplicating the handle and risking a double pallete reset.
         /// </remarks>
-        public readonly ref struct SelectPaletteScope
+#if DEBUG
+        internal class SelectPaletteScope : DisposalTracking.Tracker, IDisposable
+#else
+        internal readonly ref struct SelectPaletteScope
+#endif
         {
             public HDC HDC { get; }
             public HPALETTE HPalette { get; }
@@ -32,7 +36,26 @@ internal static partial class Interop
             }
 
             public static SelectPaletteScope HalftonePalette(HDC hdc, bool forceBackground, bool realizePalette)
-                => new SelectPaletteScope(hdc, (HPALETTE)Graphics.GetHalftonePalette(), forceBackground, realizePalette);
+            {
+                if (GetDeviceCaps(hdc, DeviceCapability.BITSPIXEL) > 8)
+                {
+                    // https://docs.microsoft.com/windows/win32/api/Gdiplusgraphics/nf-gdiplusgraphics-graphics-gethalftonepalette
+                    // The purpose of the Graphics::GetHalftonePalette method is to enable GDI+ to produce a better
+                    // quality halftone when the display uses 8 bits per pixel. This method allocates a palette of
+                    // 256 entries (each of which are 4 bytes a piece).
+                    //
+                    // Doing this is a bit pointless when the color depth is much higher (the normal scenario). As such
+                    // we'll skip doing this unless we see 8bpp or less.
+
+                    return new SelectPaletteScope();
+                }
+
+                return new SelectPaletteScope(
+                    hdc,
+                    (HPALETTE)Graphics.GetHalftonePalette(),
+                    forceBackground,
+                    realizePalette);
+            }
 
             public static implicit operator HPALETTE(in SelectPaletteScope paletteScope) => paletteScope.HPalette;
 
@@ -42,7 +65,13 @@ internal static partial class Interop
                 {
                     SelectPalette(HDC, HPalette, bForceBkgd: BOOL.FALSE);
                 }
+
+                DisposalTracking.SuppressFinalize(this);
             }
+
+#if DEBUG
+            public SelectPaletteScope() { }
+#endif
         }
     }
 }

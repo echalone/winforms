@@ -294,7 +294,7 @@ namespace System.Windows.Forms
             }
             else
             {
-                return g.GetNearestColor(Color.FromArgb(newAlpha, red, green, blue));
+                return g.FindNearestColor(Color.FromArgb(newAlpha, red, green, blue));
             }
         }
 
@@ -328,7 +328,7 @@ namespace System.Windows.Forms
                 return Color.FromArgb(r, g, b);
             }
 
-            return graphics.GetNearestColor(Color.FromArgb(r, g, b));
+            return graphics.FindNearestColor(Color.FromArgb(r, g, b));
         }
 
         private void InitCommonColors(ref Dictionary<KnownColors, Color> rgbTable)
@@ -338,12 +338,18 @@ namespace System.Windows.Forms
             // FromARGB here. So we have a simple function which calculates the blending for us.
             if (!DisplayInformation.LowResolution)
             {
-                using (Graphics g = WindowsFormsUtils.CreateMeasurementGraphics())
-                {
-                    rgbTable[KnownColors.ButtonPressedHighlight] = GetAlphaBlendedColor(g, SystemColors.Window, GetAlphaBlendedColor(g, SystemColors.Highlight, SystemColors.Window, 160), 50);
-                    rgbTable[KnownColors.ButtonCheckedHighlight] = GetAlphaBlendedColor(g, SystemColors.Window, GetAlphaBlendedColor(g, SystemColors.Highlight, SystemColors.Window, 80), 20);
-                    rgbTable[KnownColors.ButtonSelectedHighlight] = rgbTable[KnownColors.ButtonCheckedHighlight];
-                }
+                using var screen = GdiCache.GetScreenDCGraphics();
+                rgbTable[KnownColors.ButtonPressedHighlight] = GetAlphaBlendedColor(
+                    screen,
+                    SystemColors.Window,
+                    GetAlphaBlendedColor(screen, SystemColors.Highlight, SystemColors.Window, 160),
+                    50);
+                rgbTable[KnownColors.ButtonCheckedHighlight] = GetAlphaBlendedColor(
+                    screen,
+                    SystemColors.Window,
+                    GetAlphaBlendedColor(screen, SystemColors.Highlight, SystemColors.Window, 80),
+                    20);
+                rgbTable[KnownColors.ButtonSelectedHighlight] = rgbTable[KnownColors.ButtonCheckedHighlight];
             }
             else
             {

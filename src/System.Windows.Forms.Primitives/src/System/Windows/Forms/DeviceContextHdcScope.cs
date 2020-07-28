@@ -19,7 +19,11 @@ namespace System.Windows.Forms
     ///  Use in a <see langword="using" /> statement. If you must pass this around, always pass by+
     ///  <see langword="ref" /> to avoid duplicating the handle and risking a double release.
     /// </remarks>
+#if DEBUG
+    internal class DeviceContextHdcScope : DisposalTracking.Tracker, IDisposable
+#else
     internal readonly ref struct DeviceContextHdcScope
+#endif
     {
         public IDeviceContext DeviceContext { get; }
         public Gdi32.HDC HDC { get; }
@@ -54,22 +58,62 @@ namespace System.Windows.Forms
         {
         }
 
+        /// <summary>
+        ///  Prefer to use <see cref="DeviceContextHdcScope(IDeviceContext, bool, bool)"/>.
+        /// </summary>
+        /// <remarks>
+        ///  Ideally we'd not bifurcate what properties we apply unless we're absolutely sure we only want one.
+        /// </remarks>
         public unsafe DeviceContextHdcScope(
             IDeviceContext deviceContext,
             ApplyGraphicsProperties applyGraphicsState,
             bool saveHdcState = false)
         {
-            DeviceContext = deviceContext ?? throw new ArgumentNullException(nameof(deviceContext));
+            if (deviceContext is null)
+            {
+                DisposalTracking.SuppressFinalize(this!);
+                throw new ArgumentNullException(nameof(deviceContext));
+            }
+
+            DeviceContext = deviceContext;
             _savedHdcState = 0;
 
-            if (applyGraphicsState == ApplyGraphicsProperties.None || !(DeviceContext is Graphics graphics))
+            HDC = default;
+
+            IGraphicsHdcProvider? provider = deviceContext as IGraphicsHdcProvider;
+            Graphics? graphics = deviceContext as Graphics;
+
+            // If we weren't passed a Graphics object we can't save state, so it is effectively the same as apply none.
+            // If we were passed an IGraphicsHdcProvider and it tells us we're clean, we also don't need to save state.
+            if (applyGraphicsState == ApplyGraphicsProperties.None || graphics is null || provider?.IsGraphicsStateClean == true)
             {
-                // GetHdc() locks the Graphics object, it cannot be used until ReleaseHdc() is called
-                HDC = (Gdi32.HDC)DeviceContext.GetHdc();
+                if (provider is null)
+                {
+                    // We have an IDeviceContext
+                    HDC = (Gdi32.HDC)deviceContext.GetHdc();
+                }
+                else
+                {
+                    // We have a provider
+                    HDC = provider.GetHDC();
+
+                    if (HDC.IsNull)
+                    {
+                        graphics = provider.GetGraphics(createIfNeeded: true);
+                        if (graphics is null)
+                        {
+                            throw new InvalidOperationException();
+                        }
+                        HDC = (Gdi32.HDC)graphics.GetHdc();
+                        DeviceContext = graphics;
+                    }
+                }
+
                 _savedHdcState = saveHdcState ? Gdi32.SaveDC(HDC) : 0;
                 return;
             }
 
+            _savedHdcState = saveHdcState ? Gdi32.SaveDC(HDC) : 0;
             bool applyTransform = applyGraphicsState.HasFlag(ApplyGraphicsProperties.TranslateTransform);
             bool applyClipping = applyGraphicsState.HasFlag(ApplyGraphicsProperties.Clipping);
 
@@ -86,7 +130,7 @@ namespace System.Windows.Forms
             applyTransform = applyTransform && elements != null && (dx != 0 || dy != 0);
 
             using var graphicsRegion = applyClipping ? new Gdi32.RegionScope(clipRegion!, graphics) : default;
-            applyClipping = applyClipping && !graphicsRegion.IsNull;
+            applyClipping = applyClipping && !graphicsRegion!.Region.IsNull;
 
             HDC = (Gdi32.HDC)graphics.GetHdc();
 
@@ -106,14 +150,14 @@ namespace System.Windows.Forms
                 using var dcRegion = new Gdi32.RegionScope(HDC);
                 if (!dcRegion.IsNull)
                 {
-                    type = Gdi32.CombineRgn(graphicsRegion, dcRegion, graphicsRegion, Gdi32.CombineMode.RGN_AND);
+                    type = Gdi32.CombineRgn(graphicsRegion!, dcRegion, graphicsRegion!, Gdi32.RGN.AND);
                     if (type == RegionType.ERROR)
                     {
                         throw new Win32Exception();
                     }
                 }
 
-                type = Gdi32.SelectClipRgn(HDC, graphicsRegion);
+                type = Gdi32.SelectClipRgn(HDC, graphicsRegion!);
                 if (type == RegionType.ERROR)
                 {
                     throw new Win32Exception();
@@ -137,7 +181,12 @@ namespace System.Windows.Forms
             }
 
             // Note that Graphics keeps track of the HDC it passes back, so we don't need to pass it back in
-            DeviceContext?.ReleaseHdc();
+            if (!(DeviceContext is IGraphicsHdcProvider))
+            {
+                DeviceContext?.ReleaseHdc();
+            }
+
+            DisposalTracking.SuppressFinalize(this!);
         }
     }
 }

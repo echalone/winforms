@@ -662,7 +662,7 @@ namespace System.Windows.Forms
                                     value == null ? IntPtr.Zero : value.Handle);
                         if (StateImageList != null && StateImageList.Images.Count > 0 && internalStateImageList != null)
                         {
-                            SetStateImageList(internalStateImageList.Handle);
+                            SetStateImageList(internalStateImageList.CreateUniqueHandle());
                         }
                     }
                     UpdateCheckedState(root, true);
@@ -1819,7 +1819,7 @@ namespace System.Windows.Forms
                 IntPtr handle = IntPtr.Zero;
                 if (internalStateImageList != null)
                 {
-                    handle = internalStateImageList.Handle;
+                    handle = internalStateImageList.CreateUniqueHandle();
                 }
                 SetStateImageList(handle);
             }
@@ -1859,7 +1859,7 @@ namespace System.Windows.Forms
                             internalStateImageList.ImageSize = (Size)ScaledStateImageSize;
                         }
 
-                        SetStateImageList(internalStateImageList.Handle);
+                        SetStateImageList(internalStateImageList.CreateUniqueHandle());
                     }
                 }
                 else //stateImageList == null || stateImageList.Images.Count = 0;
@@ -2050,7 +2050,7 @@ namespace System.Windows.Forms
                     images[i] = stateImageList.Images[i - 1];
                 }
                 newImageList.Images.AddRange(images);
-                User32.SendMessageW(this, (User32.WM)TVM.SETIMAGELIST, (IntPtr)TVSIL.STATE, newImageList.Handle);
+                User32.SendMessageW(this, (User32.WM)TVM.SETIMAGELIST, (IntPtr)TVSIL.STATE, newImageList.CreateUniqueHandle());
 
                 if (internalStateImageList != null)
                 {
@@ -2067,7 +2067,8 @@ namespace System.Windows.Forms
             IntPtr handleOld = User32.SendMessageW(this, (User32.WM)TVM.SETIMAGELIST, (IntPtr)TVSIL.STATE, handle);
             if ((handleOld != IntPtr.Zero) && (handleOld != handle))
             {
-                ComCtl32.ImageList.Destroy(new HandleRef(this, handleOld));
+                var result = ComCtl32.ImageList.Destroy(new HandleRef(this, handleOld));
+                Debug.Assert(result.IsTrue());
             }
         }
 
@@ -2078,7 +2079,8 @@ namespace System.Windows.Forms
             IntPtr handle = User32.SendMessageW(this, (User32.WM)TVM.GETIMAGELIST, (IntPtr)TVSIL.STATE);
             if (handle != IntPtr.Zero)
             {
-                ComCtl32.ImageList.Destroy(new HandleRef(this, handle));
+                var result = ComCtl32.ImageList.Destroy(new HandleRef(this, handle));
+                Debug.Assert(result.IsTrue());
                 if (reset)
                 {
                     User32.SendMessageW(this, (User32.WM)TVM.SETIMAGELIST, (IntPtr)TVSIL.STATE);
@@ -2619,7 +2621,7 @@ namespace System.Windows.Forms
                     // user's images.
                     if (internalStateImageList != null)
                     {
-                        SetStateImageList(internalStateImageList.Handle);
+                        SetStateImageList(internalStateImageList.CreateUniqueHandle());
                     }
                 }
             }
@@ -2789,7 +2791,7 @@ namespace System.Windows.Forms
                         Debug.Assert(nmtvcd->nmcd.dwItemSpec != IntPtr.Zero, "Invalid node handle in ITEMPOSTPAINT");
 
                         // Get the node
-                        node = NodeFromHandle((IntPtr)nmtvcd->nmcd.dwItemSpec);
+                        node = NodeFromHandle(nmtvcd->nmcd.dwItemSpec);
 
                         if (node == null)
                         {
@@ -2798,18 +2800,14 @@ namespace System.Windows.Forms
                             return;
                         }
 
-                        Graphics g = nmtvcd->nmcd.hdc.CreateGraphics();
-
-                        DrawTreeNodeEventArgs e;
-
-                        try
+                        using (Graphics g = nmtvcd->nmcd.hdc.CreateGraphics())
                         {
                             Rectangle bounds = node.Bounds;
                             Size textSize = TextRenderer.MeasureText(node.Text, node.TreeView.Font);
                             Point textLoc = new Point(bounds.X - 1, bounds.Y); // required to center the text
                             bounds = new Rectangle(textLoc, new Size(textSize.Width, bounds.Height));
 
-                            e = new DrawTreeNodeEventArgs(g, node, bounds, (TreeNodeStates)(nmtvcd->nmcd.uItemState));
+                            DrawTreeNodeEventArgs e = new DrawTreeNodeEventArgs(g, node, bounds, (TreeNodeStates)(nmtvcd->nmcd.uItemState));
                             OnDrawNode(e);
 
                             if (e.DrawDefault)
@@ -2829,18 +2827,12 @@ namespace System.Windows.Forms
                                 }
                                 else
                                 {
-                                    using (Brush brush = new SolidBrush(BackColor))
-                                    {
-                                        g.FillRectangle(brush, bounds);
-                                    }
+                                    using var brush = BackColor.GetCachedSolidBrushScope();
+                                    g.FillRectangle(brush, bounds);
 
                                     TextRenderer.DrawText(g, e.Node.Text, font, bounds, color, TextFormatFlags.Default);
                                 }
                             }
-                        }
-                        finally
-                        {
-                            g.Dispose();
                         }
 
                         m.Result = (IntPtr)CDRF.NOTIFYSUBITEMDRAW;
@@ -3081,13 +3073,12 @@ namespace System.Windows.Forms
 
             if (((User32.PRF)m.LParam & User32.PRF.NONCLIENT) != 0 && Application.RenderWithVisualStyles && BorderStyle == BorderStyle.Fixed3D)
             {
-                using (Graphics g = Graphics.FromHdc(m.WParam))
-                {
-                    Rectangle rect = new Rectangle(0, 0, Size.Width - 1, Size.Height - 1);
-                    g.DrawRectangle(new Pen(VisualStyleInformation.TextControlBorder), rect);
-                    rect.Inflate(-1, -1);
-                    g.DrawRectangle(SystemPens.Window, rect);
-                }
+                using Graphics g = Graphics.FromHdc(m.WParam);
+                Rectangle rect = new Rectangle(0, 0, Size.Width - 1, Size.Height - 1);
+                using var pen = VisualStyleInformation.TextControlBorder.GetCachedPenScope();
+                g.DrawRectangle(pen, rect);
+                rect.Inflate(-1, -1);
+                g.DrawRectangle(SystemPens.Window, rect);
             }
         }
 

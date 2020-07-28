@@ -1814,7 +1814,7 @@ namespace System.Windows.Forms
 
             //for getting the current Locale to set the Scrollbars...
             //
-            SendMessageW(this, (WM)LB.SETLOCALE, (IntPtr)CultureInfo.CurrentCulture.LCID);
+            SendMessageW(this, (WM)LB.SETLOCALE, (IntPtr)Kernel32.GetThreadLocale().RawValue);
 
             if (columnWidth != 0)
             {
@@ -2381,16 +2381,12 @@ namespace System.Windows.Forms
             base.WndProc(ref m);
             if (((PRF)m.LParam & PRF.NONCLIENT) != 0 && Application.RenderWithVisualStyles && BorderStyle == BorderStyle.Fixed3D)
             {
-                using (Graphics g = Graphics.FromHdc(m.WParam))
-                {
-                    Rectangle rect = new Rectangle(0, 0, Size.Width - 1, Size.Height - 1);
-                    using (Pen pen = new Pen(VisualStyleInformation.TextControlBorder))
-                    {
-                        g.DrawRectangle(pen, rect);
-                    }
-                    rect.Inflate(-1, -1);
-                    g.DrawRectangle(SystemPens.Window, rect);
-                }
+                using Graphics g = Graphics.FromHdc(m.WParam);
+                Rectangle rect = new Rectangle(0, 0, Size.Width - 1, Size.Height - 1);
+                using var pen = VisualStyleInformation.TextControlBorder.GetCachedPenScope();
+                g.DrawRectangle(pen, rect);
+                rect.Inflate(-1, -1);
+                g.DrawRectangle(SystemPens.Window, rect);
             }
         }
 
@@ -2416,16 +2412,22 @@ namespace System.Windows.Forms
         {
             DRAWITEMSTRUCT* dis = (DRAWITEMSTRUCT*)m.LParam;
 
-            using var paletteScope = Gdi32.SelectPaletteScope.HalftonePalette(dis->hDC, forceBackground: false, realizePalette: false);
-
-            using Graphics g = dis->hDC.CreateGraphics();
             Rectangle bounds = dis->rcItem;
             if (HorizontalScrollbar)
             {
                 bounds.Width = MultiColumn ? Math.Max(ColumnWidth, bounds.Width) : Math.Max(MaxItemWidth, bounds.Width);
             }
 
-            OnDrawItem(new DrawItemEventArgs(g, Font, bounds, (int)dis->itemID, (DrawItemState)dis->itemState, ForeColor, BackColor));
+            using var e = new DrawItemEventArgs(
+                dis->hDC,
+                Font,
+                bounds,
+                dis->itemID,
+                dis->itemState,
+                ForeColor,
+                BackColor);
+
+            OnDrawItem(e);
 
             m.Result = (IntPtr)1;
         }

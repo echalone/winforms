@@ -170,7 +170,9 @@ namespace System.Windows.Forms.Tests
             Assert.Equal(97, createParams.Height);
             Assert.Equal(IntPtr.Zero, createParams.Parent);
             Assert.Null(createParams.Param);
-            Assert.Equal(0x56010148, createParams.Style);
+            // LVS.SHAREIMAGELISTS is temporarily removed from style until ownership management is fixed
+            // https://github.com/dotnet/winforms/issues/3531
+            Assert.Equal(0x56010108, createParams.Style);
             Assert.Equal(121, createParams.Width);
             Assert.Equal(0, createParams.X);
             Assert.Equal(0, createParams.Y);
@@ -3773,7 +3775,8 @@ namespace System.Windows.Forms.Tests
             yield return new object[] { false, false, false, false, View.Tile, CreateNonEmpty(), 0, 0 };
         }
 
-        [WinFormsTheory]
+        [WinFormsTheory(Skip = "Leads to random AccessViolationException. See: https://github.com/dotnet/winforms/issues/3358")]
+        [ActiveIssue("https://github.com/dotnet/winforms/issues/3358")]
         [MemberData(nameof(StateImageList_SetWithHandleWithNonNullOldValue_GetReturnsExpected))]
         public void ListView_StateImageList_SetWithHandleWithNonNullOldValue_GetReturnsExpected(bool useCompatibleStateImageBehavior, bool checkBoxes, bool autoArrange, bool virtualMode, View view, ImageList value, int expectedInvalidatedCallCount, int expectedCreatedCallCount)
         {

@@ -17,16 +17,16 @@ namespace System.Windows.Forms
     /// </summary>
     public class DataGridViewHeaderCell : DataGridViewCell
     {
-        private const byte DATAGRIDVIEWHEADERCELL_themeMargin = 100; // Used to calculate the margins required for theming rendering
+        private const byte ThemeMargin = 100; // Used to calculate the margins required for theming rendering
 
-        private static readonly Type defaultFormattedValueType = typeof(string);
-        private static readonly Type defaultValueType = typeof(object);
-        private static readonly Type cellType = typeof(DataGridViewHeaderCell);
-        private static Rectangle rectThemeMargins = new Rectangle(-1, -1, 0, 0);
-        private static readonly int PropValueType = PropertyStore.CreateKey();
-        private static readonly int PropButtonState = PropertyStore.CreateKey();
-        private static readonly int PropFlipXPThemesBitmap = PropertyStore.CreateKey();
-        private const string AEROTHEMEFILENAME = "Aero.msstyles";
+        private static readonly Type s_defaultFormattedValueType = typeof(string);
+        private static readonly Type s_defaultValueType = typeof(object);
+        private static readonly Type s_cellType = typeof(DataGridViewHeaderCell);
+        private static Rectangle s_rectThemeMargins = new Rectangle(-1, -1, 0, 0);
+        private static readonly int s_propValueType = PropertyStore.CreateKey();
+        private static readonly int s_propButtonState = PropertyStore.CreateKey();
+        private static readonly int s_propFlipXPThemesBitmap = PropertyStore.CreateKey();
+        private const string AeroThemeFileName = "Aero.msstyles";
 
         public DataGridViewHeaderCell()
         {
@@ -36,7 +36,7 @@ namespace System.Windows.Forms
         {
             get
             {
-                int buttonState = Properties.GetInteger(PropButtonState, out bool found);
+                int buttonState = Properties.GetInteger(s_propButtonState, out bool found);
                 if (found)
                 {
                     return (ButtonState)buttonState;
@@ -52,7 +52,7 @@ namespace System.Windows.Forms
                 Debug.Assert(Enum.IsDefined(typeof(ButtonState), value));
                 if (ButtonState != value)
                 {
-                    Properties.SetInteger(PropButtonState, (int)value);
+                    Properties.SetInteger(s_propButtonState, (int)value);
                 }
             }
         }
@@ -98,13 +98,13 @@ namespace System.Windows.Forms
         {
             get
             {
-                return (Bitmap)Properties.GetObject(PropFlipXPThemesBitmap);
+                return (Bitmap)Properties.GetObject(s_propFlipXPThemesBitmap);
             }
             set
             {
-                if (value != null || Properties.ContainsObject(PropFlipXPThemesBitmap))
+                if (value != null || Properties.ContainsObject(s_propFlipXPThemesBitmap))
                 {
-                    Properties.SetObject(PropFlipXPThemesBitmap, value);
+                    Properties.SetObject(s_propFlipXPThemesBitmap, value);
                 }
             }
         }
@@ -113,7 +113,7 @@ namespace System.Windows.Forms
         {
             get
             {
-                return defaultFormattedValueType;
+                return s_defaultFormattedValueType;
             }
         }
 
@@ -147,7 +147,7 @@ namespace System.Windows.Forms
 
         private protected override bool HasValueType
         {
-            get => Properties.ContainsObject(PropValueType) && Properties.GetObject(PropValueType) != null;
+            get => Properties.ContainsObject(s_propValueType) && Properties.GetObject(s_propValueType) != null;
         }
 
         [Browsable(false)]
@@ -205,18 +205,18 @@ namespace System.Windows.Forms
         {
             get
             {
-                Type valueType = (Type)Properties.GetObject(PropValueType);
+                Type valueType = (Type)Properties.GetObject(s_propValueType);
                 if (valueType != null)
                 {
                     return valueType;
                 }
-                return defaultValueType;
+                return s_defaultValueType;
             }
             set
             {
-                if (value != null || Properties.ContainsObject(PropValueType))
+                if (value != null || Properties.ContainsObject(s_propValueType))
                 {
-                    Properties.SetObject(PropValueType, value);
+                    Properties.SetObject(s_propValueType, value);
                 }
             }
         }
@@ -254,7 +254,7 @@ namespace System.Windows.Forms
         {
             DataGridViewHeaderCell dataGridViewCell;
             Type thisType = GetType();
-            if (thisType == cellType) //performance improvement
+            if (thisType == s_cellType) //performance improvement
             {
                 dataGridViewCell = new DataGridViewHeaderCell();
             }
@@ -442,19 +442,19 @@ namespace System.Windows.Forms
 
         internal static Rectangle GetThemeMargins(Graphics g)
         {
-            if (rectThemeMargins.X == -1)
+            if (s_rectThemeMargins.X == -1)
             {
-                Rectangle rectCell = new Rectangle(0, 0, DATAGRIDVIEWHEADERCELL_themeMargin, DATAGRIDVIEWHEADERCELL_themeMargin);
+                Rectangle rectCell = new Rectangle(0, 0, ThemeMargin, ThemeMargin);
                 Rectangle rectContent = DataGridViewHeaderCellRenderer.VisualStyleRenderer.GetBackgroundContentRectangle(g, rectCell);
-                rectThemeMargins.X = rectContent.X;
-                rectThemeMargins.Y = rectContent.Y;
-                rectThemeMargins.Width = DATAGRIDVIEWHEADERCELL_themeMargin - rectContent.Right;
-                rectThemeMargins.Height = DATAGRIDVIEWHEADERCELL_themeMargin - rectContent.Bottom;
+                s_rectThemeMargins.X = rectContent.X;
+                s_rectThemeMargins.Y = rectContent.Y;
+                s_rectThemeMargins.Width = ThemeMargin - rectContent.Right;
+                s_rectThemeMargins.Height = ThemeMargin - rectContent.Bottom;
                 // On older platforms, the theming margins for a header are unexpectedly (3, 0, 0, 0) when you'd expect something like (0, 0, 2, 3)
-                if (rectThemeMargins.X == 3 &&
-                    rectThemeMargins.Y + rectThemeMargins.Width + rectThemeMargins.Height == 0)
+                if (s_rectThemeMargins.X == 3 &&
+                    s_rectThemeMargins.Y + s_rectThemeMargins.Width + s_rectThemeMargins.Height == 0)
                 {
-                    rectThemeMargins = new Rectangle(0, 0, 2, 3);
+                    s_rectThemeMargins = new Rectangle(0, 0, 2, 3);
                 }
                 else
                 {
@@ -464,9 +464,9 @@ namespace System.Windows.Forms
                     try
                     {
                         string themeFilename = System.IO.Path.GetFileName(System.Windows.Forms.VisualStyles.VisualStyleInformation.ThemeFilename);
-                        if (string.Equals(themeFilename, AEROTHEMEFILENAME, StringComparison.OrdinalIgnoreCase))
+                        if (string.Equals(themeFilename, AeroThemeFileName, StringComparison.OrdinalIgnoreCase))
                         {
-                            rectThemeMargins = new Rectangle(2, 1, 0, 2);
+                            s_rectThemeMargins = new Rectangle(2, 1, 0, 2);
                         }
                     }
                     catch
@@ -475,7 +475,7 @@ namespace System.Windows.Forms
                 }
             }
 
-            return rectThemeMargins;
+            return s_rectThemeMargins;
         }
 
         protected override object GetValue(int rowIndex)
@@ -484,7 +484,7 @@ namespace System.Windows.Forms
             {
                 throw new ArgumentOutOfRangeException(nameof(rowIndex));
             }
-            return Properties.GetObject(PropCellValue);
+            return Properties.GetObject(s_propCellValue);
         }
 
         protected override bool MouseDownUnsharesRow(DataGridViewCellMouseEventArgs e)
@@ -574,42 +574,44 @@ namespace System.Windows.Forms
             }
         }
 
-        protected override void Paint(Graphics graphics,
-                                      Rectangle clipBounds,
-                                      Rectangle cellBounds,
-                                      int rowIndex,
-                                      DataGridViewElementStates dataGridViewElementState,
-                                      object value,
-                                      object formattedValue,
-                                      string errorText,
-                                      DataGridViewCellStyle cellStyle,
-                                      DataGridViewAdvancedBorderStyle advancedBorderStyle,
-                                      DataGridViewPaintParts paintParts)
+        protected override void Paint(
+            Graphics graphics,
+            Rectangle clipBounds,
+            Rectangle cellBounds,
+            int rowIndex,
+            DataGridViewElementStates dataGridViewElementState,
+            object value,
+            object formattedValue,
+            string errorText,
+            DataGridViewCellStyle cellStyle,
+            DataGridViewAdvancedBorderStyle advancedBorderStyle,
+            DataGridViewPaintParts paintParts)
         {
-            if (cellStyle == null)
-            {
+            if (cellStyle is null)
                 throw new ArgumentNullException(nameof(cellStyle));
-            }
 
-            if (DataGridViewCell.PaintBorder(paintParts))
+            if (PaintBorder(paintParts))
             {
                 PaintBorder(graphics, clipBounds, cellBounds, cellStyle, advancedBorderStyle);
             }
 
-            if (DataGridViewCell.PaintBackground(paintParts))
+            if (PaintBackground(paintParts))
             {
-                Rectangle valBounds = cellBounds;
+                Rectangle bounds = cellBounds;
                 Rectangle borderWidths = BorderWidths(advancedBorderStyle);
 
-                valBounds.Offset(borderWidths.X, borderWidths.Y);
-                valBounds.Width -= borderWidths.Right;
-                valBounds.Height -= borderWidths.Bottom;
+                bounds.Offset(borderWidths.X, borderWidths.Y);
+                bounds.Width -= borderWidths.Right;
+                bounds.Height -= borderWidths.Bottom;
 
                 bool cellSelected = (dataGridViewElementState & DataGridViewElementStates.Selected) != 0;
-                SolidBrush br = DataGridView.GetCachedBrush((DataGridViewCell.PaintSelectionBackground(paintParts) && cellSelected) ? cellStyle.SelectionBackColor : cellStyle.BackColor);
-                if (br.Color.A == 255)
+                Color backColor = PaintSelectionBackground(paintParts) && cellSelected
+                    ? cellStyle.SelectionBackColor : cellStyle.BackColor;
+
+                if (!backColor.HasTransparency())
                 {
-                    graphics.FillRectangle(br, valBounds);
+                    using var brush = backColor.GetCachedSolidBrushScope();
+                    graphics.FillRectangle(brush, bounds);
                 }
             }
         }
@@ -618,9 +620,7 @@ namespace System.Windows.Forms
         ///  Gets the row Index and column Index of the cell.
         /// </summary>
         public override string ToString()
-        {
-            return "DataGridViewHeaderCell { ColumnIndex=" + ColumnIndex.ToString(CultureInfo.CurrentCulture) + ", RowIndex=" + RowIndex.ToString(CultureInfo.CurrentCulture) + " }";
-        }
+            => $"DataGridViewHeaderCell {{ ColumnIndex={ColumnIndex}, RowIndex={RowIndex} }}";
 
         private void UpdateButtonState(ButtonState newButtonState, int rowIndex)
         {

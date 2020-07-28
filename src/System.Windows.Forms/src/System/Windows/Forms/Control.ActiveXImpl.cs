@@ -412,8 +412,8 @@ namespace System.Windows.Forms
                 // the caller figures it out and sends us a different DC.
 
                 Gdi32.HDC hdc = (Gdi32.HDC)hdcDraw;
-                Gdi32.ObjectType hdcType = Gdi32.GetObjectType(hdc);
-                if (hdcType == Gdi32.ObjectType.OBJ_METADC)
+                Gdi32.OBJ hdcType = Gdi32.GetObjectType(hdc);
+                if (hdcType == Gdi32.OBJ.METADC)
                 {
                     return HRESULT.VIEW_E_DRAW;
                 }
@@ -452,7 +452,7 @@ namespace System.Windows.Forms
                 try
                 {
                     IntPtr flags = (IntPtr)(User32.PRF.CHILDREN | User32.PRF.CLIENT | User32.PRF.ERASEBKGND | User32.PRF.NONCLIENT);
-                    if (hdcType != Gdi32.ObjectType.OBJ_ENHMETADC)
+                    if (hdcType != Gdi32.OBJ.ENHMETADC)
                     {
                         User32.SendMessageW(_control, User32.WM.PRINT, hdcDraw, flags);
                     }
@@ -594,7 +594,7 @@ namespace System.Windows.Forms
                     HRESULT hr = disp.Invoke(
                         dispid,
                         &g,
-                        NativeMethods.LOCALE_USER_DEFAULT,
+                        Kernel32.LCID.USER_DEFAULT,
                         Oleaut32.DISPATCH.PROPERTYGET,
                         &dispParams,
                         pvt,
@@ -1123,7 +1123,9 @@ namespace System.Windows.Forms
                                     byte[] bytes = Convert.FromBase64String(obj.ToString());
                                     MemoryStream stream = new MemoryStream(bytes);
                                     BinaryFormatter formatter = new BinaryFormatter();
+#pragma warning disable CS0618 // Type or member is obsolete
                                     props[i].SetValue(_control, formatter.Deserialize(stream));
+#pragma warning restore CS0618 // Type or member is obsolete
                                 }
                                 else
                                 {
@@ -1526,7 +1528,9 @@ namespace System.Windows.Forms
                     public SafeIUnknown(object obj, bool addRefIntPtr, Guid iid)
                         : base(IntPtr.Zero, true)
                     {
+#pragma warning disable SYSLIB0004 // Type or member is obsolete
                         RuntimeHelpers.PrepareConstrainedRegions();
+#pragma warning restore SYSLIB0004 // Type or member is obsolete
                         try
                         {
                             // Set this.handle in a finally block to ensure the com ptr is set in the SafeHandle
@@ -1799,7 +1803,9 @@ namespace System.Windows.Forms
                             // Resource property.  Save this to the bag as a 64bit encoded string.
                             MemoryStream stream = new MemoryStream();
                             BinaryFormatter formatter = new BinaryFormatter();
+#pragma warning disable CS0618 // Type or member is obsolete
                             formatter.Serialize(stream, props[i].GetValue(_control));
+#pragma warning restore CS0618 // Type or member is obsolete
                             byte[] bytes = new byte[(int)stream.Length];
                             stream.Position = 0;
                             stream.Read(bytes, 0, bytes.Length);
@@ -2473,7 +2479,9 @@ namespace System.Windows.Forms
                     BinaryFormatter formatter = new BinaryFormatter();
                     try
                     {
+#pragma warning disable CS0618 // Type or member is obsolete
                         _bag = (Hashtable)formatter.Deserialize(stream);
+#pragma warning restore CS0618 // Type or member is obsolete
                     }
                     catch (Exception e)
                     {
@@ -2508,7 +2516,9 @@ namespace System.Windows.Forms
                 {
                     Stream stream = new DataStreamFromComStream(istream);
                     BinaryFormatter formatter = new BinaryFormatter();
+#pragma warning disable CS0618 // Type or member is obsolete
                     formatter.Serialize(stream, _bag);
+#pragma warning restore CS0618 // Type or member is obsolete
                 }
             }
         }
